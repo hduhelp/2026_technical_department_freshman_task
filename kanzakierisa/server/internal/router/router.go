@@ -51,17 +51,26 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 	// 依赖在 router 一处集中构造并向下传递，避免各层自行 new 出隐藏的耦合。
 	// 目前规模不值得引入 DI 框架，显式手工装配反而更易读。
 	userStore := store.NewUserStore(pool)
+	postStore := store.NewPostStore(pool)
 	tokenManager := jwtutil.NewManager(cfg.JWTSecret, cfg.JWTExpireHours)
 
 	authService := service.NewAuthService(userStore, tokenManager)
 	userService := service.NewUserService(userStore)
+	postService := service.NewPostService(postStore, userStore)
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
+	postHandler := handler.NewPostHandler(postService)
+	uploadHandler := handler.NewUploadHandler(cfg)
 
 	// 鉴权中间件需要「按 id 回查用户」，这里把 AuthService 适配成中间件的窄接口，
 	// 让 middleware 包不必依赖 service 包（依赖方向保持单向：router → 全部）。
 	loader := &authLoader{auth: authService}
+
+	// 上传文件的静态托管。注意挂在 /uploads（**不是** /api/uploads），
+	// 且必须在 api.Group 之外 —— 图片是公开资源，不应经过 /api 前缀，
+	// 也不应被 API 的鉴权中间件拦截（SPEC 03 要点 8）。
+	engine.Static("/uploads", cfg.UploadDir)
 
 	api := engine.Group("/api")
 	{
@@ -71,12 +80,25 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
 
+		// 软鉴权接口：登录与否都能访问，登录用户能拿到额外视角字段
+		// （本人可见的联系方式、can_edit / can_claim）。
+		soft := api.Group("", middleware.OptionalAuth(tokenManager, loader))
+		{
+			soft.GET("/posts/:id", postHandler.Detail)
+		}
+
 		// 受保护接口：必须携带合法 Bearer token
 		authed := api.Group("", middleware.Auth(tokenManager, loader))
 		{
 			authed.POST("/auth/logout", authHandler.Logout)
 			authed.GET("/users/me", userHandler.Me)
 			authed.PATCH("/users/me", userHandler.UpdateMe)
+
+			authed.POST("/posts", postHandler.Create)
+			authed.PUT("/posts/:id", postHandler.Update)
+			authed.DELETE("/posts/:id", postHandler.Delete)
+
+			authed.POST("/upload", uploadHandler.Upload)
 		}
 	}
 

@@ -1,7 +1,7 @@
 # API 文档
 
 > 校园失物招领系统后端接口文档。
-> 本文件随阶段推进增量维护：**P1 已完成认证与用户模块**，其余模块在 P4 阶段补全。
+> 本文件随阶段推进增量维护：**P0 脚手架 / P1 认证与用户 / P2 帖子 CRUD 与图片上传已完成**，其余模块在后续阶段补全。
 
 ## 约定速览
 
@@ -72,20 +72,23 @@
 | 认证 | POST `/api/auth/logout` | 是 | 无状态，返回成功即可（前端清 token） | P1 ✅ |
 | 用户 | GET `/api/users/me` | 是 | 当前用户信息 | P1 ✅ |
 | 用户 | PATCH `/api/users/me` | 是 | `{nickname?, contact?, contact_public?}` | P1 ✅ |
-| 帖子 | POST `/api/posts` | 是 | 创建帖子 | P2 |
-| 帖子 | GET `/api/posts` | 否 | `type` `status` `category` `keyword` `page` `pageSize` | P2 |
-| 帖子 | GET `/api/posts/:id` | 软鉴权 | 详情，按三级规则处理联系方式 | P2 |
-| 帖子 | PUT `/api/posts/:id` | 是 | 仅作者；**不允许改 `type` 与 `status`** | P2 |
-| 帖子 | DELETE `/api/posts/:id` | 是 | 仅作者；级联删除其认领 | P2 |
-| 帖子 | PATCH `/api/posts/:id/status` | 是 | `{status}`，仅作者，走状态机白名单 | P2 |
-| 帖子 | GET `/api/users/me/posts` | 是 | `status?` `page` `pageSize` | P2 |
-| 上传 | POST `/api/upload` | 是 | `multipart/form-data`，字段名 `file` → `{url}` | P3 |
-| 认领 | POST `/api/posts/:id/claims` | 是 | `{proof}` | P3 |
-| 认领 | GET `/api/posts/:id/claims` | 是 | 仅帖主，返回该帖全部申请 | P3 |
-| 认领 | PATCH `/api/claims/:id` | 是 | `{action: "approve"\|"reject", reject_reason?}`，仅帖主或 admin | P3 |
-| 认领 | GET `/api/users/me/claims` | 是 | 我发出的认领；`page` `pageSize` | P3 |
-| 认领 | POST `/api/claims/:id/redeem` | 是 | `{voucher_code}`，仅帖主；核销后帖子置 `closed` | P3 |
-| 匹配 | GET `/api/posts/:id/matches` | 软鉴权 | 返回 `[{post, score, reasons[]}]`，最多 5 条 | P2 |
+| 帖子 | POST `/api/posts` | 是 | 创建帖子 | P2 ✅ |
+| 帖子 | GET `/api/posts` | 否 | `type` `status` `category` `keyword` `page` `pageSize` | P3 |
+| 帖子 | GET `/api/posts/:id` | 软鉴权 | 详情，按三级规则处理联系方式 | P2 ✅ |
+| 帖子 | PUT `/api/posts/:id` | 是 | 仅作者；**不允许改 `type` 与 `status`** | P2 ✅ |
+| 帖子 | DELETE `/api/posts/:id` | 是 | 仅作者；级联删除其认领 | P2 ✅ |
+| 帖子 | PATCH `/api/posts/:id/status` | 是 | `{status}`，仅作者，走状态机白名单 | P3 |
+| 帖子 | GET `/api/users/me/posts` | 是 | `status?` `page` `pageSize` | P3 |
+| 上传 | POST `/api/upload` | 是 | `multipart/form-data`，字段名 `file` → `{url}` | P2 ✅ |
+| 认领 | POST `/api/posts/:id/claims` | 是 | `{proof}` | P6 |
+| 认领 | GET `/api/posts/:id/claims` | 是 | 仅帖主，返回该帖全部申请 | P6 |
+| 认领 | PATCH `/api/claims/:id` | 是 | `{action: "approve"\|"reject", reject_reason?}`，仅帖主或 admin | P6 |
+| 认领 | GET `/api/users/me/claims` | 是 | 我发出的认领；`page` `pageSize` | P6 |
+| 认领 | POST `/api/claims/:id/redeem` | 是 | `{voucher_code}`，仅帖主；核销后帖子置 `closed` | P6 |
+| 匹配 | GET `/api/posts/:id/matches` | 软鉴权 | 返回 `[{post, score, reasons[]}]`，最多 5 条 | P6 |
+
+> **静态资源**：`GET /uploads/<uuid>.<ext>` —— **不经过 `/api` 前缀**，也**不需要鉴权**（图片是公开资源）。
+> 由 `r.Static("/uploads", cfg.UploadDir)` 直接托管。
 
 ---
 
@@ -318,9 +321,276 @@ curl -X PATCH http://localhost:8080/api/users/me \
 
 ---
 
+## Post
+
+```json
+{
+  "id": 12,
+  "user_id": 1,
+  "type": "lost",
+  "title": "黑色卡套校园卡",
+  "category": "card",
+  "location": "下沙校区图书馆 3 楼",
+  "happened_at": "2026-09-26T14:30:00Z",
+  "description": "黑色卡套，里面是校园卡，卡号尾号 0421",
+  "images": ["/uploads/8f3c....jpg"],
+  "status": "open",
+  "created_at": "2026-09-30T11:00:00Z",
+  "updated_at": "2026-09-30T11:00:00Z",
+  "author": { "id": 1, "nickname": "小明", "contact": "", "contact_visible": false },
+  "can_edit": true,
+  "can_claim": false
+}
+```
+
+- `author` 对象**只有 4 个字段**（`id` / `nickname` / `contact` / `contact_visible`）：
+  没有 `username`、没有 `role`、**永远没有 `password_hash`**。这是白名单式的设计 ——
+  不外泄不靠「记得删掉」，而靠结构体里根本没有那个字段。
+- `author.contact`：按三级可见性规则填充，不可见时为空串 `""`
+- `can_edit`：请求者是否为作者
+- `can_claim`：是否满足认领的静态前置条件（`type=found`、非本人、`status≠closed`、已登录）；游客恒 `false`
+- `images` 为空时是 `[]`，**不是 `null`**（数据库列也存 `[]` 而非 NULL）
+
+---
+
+## POST /api/posts
+
+创建帖子。
+
+- 鉴权：**是**
+
+### 请求体
+
+| 字段 | 类型 | 必填 | 约束 |
+| --- | --- | --- | --- |
+| `type` | string | 是 | ∈ {`lost`, `found`} |
+| `title` | string | 是 | 1–64 **字符（rune）** |
+| `category` | string | 否 | 缺省 `other`；∈ {`card`,`digital`,`book`,`key`,`clothes`,`other`} |
+| `location` | string | 否 | ≤64 rune |
+| `happened_at` | string | 是 | RFC3339（允许带毫秒），且**不晚于当前时间 + 1 小时** |
+| `description` | string | 否 | ≤2000 rune |
+| `images` | string[] | 否 | ≤3 项；每项必须以 `/uploads/` 开头且不含 `..` |
+
+```json
+{
+  "type": "lost",
+  "title": "黑色卡套校园卡",
+  "category": "card",
+  "location": "下沙校区图书馆 3 楼",
+  "happened_at": "2026-09-26T14:30:00Z",
+  "description": "黑色卡套，里面是校园卡",
+  "images": ["/uploads/8f3c.jpg"]
+}
+```
+
+### 响应 data
+
+新建的 `Post`（含 `author`、`can_edit=true`）。
+
+### 说明
+
+- 初始 `status` 固定为 `open`，**不接受前端传入**（请求体带 `status` 会在 JSON 解码阶段被丢弃）
+- 作者固定取当前登录用户，**不接受请求体里的 `user_id`**
+- 长度一律按 **rune** 计（`utf8.RuneCountInString`）。中文标题用字节计会 3 倍超长，
+  一个 22 字的中文标题会被误判为「超过 64」
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| `type` 非法 / 标题空或超长 / `category` 非法 / `happened_at` 缺失或超未来 / `images` 超量或前缀错 | 1001 | 400 |
+| 未登录 | 1002 | 401 |
+
+```bash
+curl -X POST http://localhost:8080/api/posts \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"type":"lost","title":"黑色卡套校园卡","category":"card","location":"图书馆3楼",
+       "happened_at":"2026-09-26T14:30:00Z","description":"黑色卡套","images":[]}'
+```
+
+---
+
+## GET /api/posts/:id
+
+帖子详情。按 SPEC 7.2 的三级规则处理联系方式可见性。
+
+- 鉴权：**软鉴权**（有无 token 都放行；非法 token 静默降级为游客，**不返回 1002**）
+
+### 联系方式三级可见性
+
+```
+if viewer == 游客                    → false
+if viewer.ID == author.ID            → true   // 本人可见
+if author.contact_public             → true   // 作者主动公开
+if 双方存在已通过的认领关系           → true   // P6 接入，P2 恒 false
+otherwise                            → false
+```
+
+响应中**同时**返回 `author.contact`（不可见时 `""`）与 `author.contact_visible`（bool），
+前端据此渲染不同 CTA。
+
+```bash
+# 游客
+curl http://localhost:8080/api/posts/12
+# → author.contact="", contact_visible=false, can_edit=false
+
+# 登录用户
+curl http://localhost:8080/api/posts/12 -H "Authorization: Bearer $TOKEN"
+# → 本人作者：author.contact="wx: alice_hdu", contact_visible=true, can_edit=true
+```
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 帖子不存在 | 1004 | 404 |
+| 路径 id 非正整数 | 1001 | 400 |
+
+---
+
+## PUT /api/posts/:id
+
+更新帖子。**仅作者**。
+
+- 鉴权：**是**
+
+### 请求体
+
+全部字段可选，只更新请求中**真正出现**的字段（语义等同 PATCH）。
+
+| 字段 | 约束 |
+| --- | --- |
+| `title` | 空时视为不修改；给了则 1–64 rune |
+| `category` | ∈ 枚举 |
+| `location` | ≤64 rune |
+| `happened_at` | RFC3339，不晚于当前时间 + 1h |
+| `description` | ≤2000 rune |
+| `images` | ≤3 项，`/uploads/` 前缀 |
+
+### 不可修改的字段
+
+`type`、`status`、`user_id` **无法通过本接口修改**。
+请求体中即使携带这些键也会被忽略（`UpdatePostReq` 结构体里没有对应字段，JSON 解码阶段即丢弃），
+响应仍为 `code=0` 但值保持不变。
+
+```bash
+# 尝试篡改 type/status/user_id —— 返回 code=0，但三者均未改变
+curl -X PUT http://localhost:8080/api/posts/12 \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"title":"新标题","type":"found","status":"closed","user_id":999}'
+```
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 字段校验失败 | 1001 | 400 |
+| 未登录 | 1002 | 401 |
+| **非作者**（改别人的帖子） | 1003 | 403 |
+| 帖子不存在 | 1004 | 404 |
+| 帖子已 `closed`（终态不可编辑） | 1007 | 400 |
+
+> **为什么把「已结束不可编辑」归到 1007 而不是 1001？**
+> 1007 的语义是「状态流转非法」。`closed` 是终态，对它的任何写操作
+> 本质都是「试图让一个终态对象继续变化」，与状态机约束同源，故复用该码。
+
+---
+
+## DELETE /api/posts/:id
+
+删除帖子。**仅作者**。
+
+- 鉴权：**是**
+
+该帖子下的**全部认领记录由外键 `ON DELETE CASCADE` 自动清理**，
+应用层不写任何删 claims 的 SQL —— 多写一句就多一处可能与数据库约束不一致的地方。
+
+```json
+{ "code": 0, "message": "ok", "data": null }
+```
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 未登录 | 1002 | 401 |
+| 非作者 | 1003 | 403 |
+| 帖子不存在 | 1004 | 404 |
+
+---
+
+## POST /api/upload
+
+上传图片。
+
+- 鉴权：**是**
+- Content-Type：`multipart/form-data`
+- 表单字段名：`file`
+
+### 校验（双重，缺一不可）
+
+| 步骤 | 规则 | 失败 |
+| --- | --- | --- |
+| 1. 体积 | `file.Size` ≤ 2MB（`UPLOAD_MAX_MB` 可配） | 1009 |
+| 2. 扩展名 | ∈ {`.jpg`, `.jpeg`, `.png`}（不区分大小写） | 1009 |
+| 3. 魔数 | 读前 512 字节，`http.DetectContentType` 结果 ∈ {`image/jpeg`, `image/png`} | 1009 |
+
+> **为什么要双重校验？** 只信扩展名会被「把 .exe 改名成 .png」绕过；
+> 只信魔数则无法快速拒绝明显不合法的请求。两者同时成立才放行。
+>
+> 实测：一个内容为纯文本、但改名成 `.png` 的文件会被**魔数**拦下（1009），
+> 证明扩展名不是唯一防线。
+
+### 重命名与路径安全
+
+- 落盘文件名固定为 `uuid.NewString() + 小写扩展名`，**绝不使用原始文件名**（防路径穿越与覆盖）
+- 目标路径经 `filepath.Abs` 归一化后，与上传根目录做前缀比较，
+  确认未越出根目录才写入（比较时补 `os.PathSeparator`，
+  避免 `/data/uploads-evil` 被 `/data/uploads` 误判为「在目录内」）
+
+### 响应 data
+
+```json
+{ "url": "/uploads/a65f333c-c630-4c2a-ba68-61757695a1b3.png" }
+```
+
+该 URL 可直接通过 `GET http://localhost:8080/uploads/<uuid>.png` 访问（无需鉴权），
+返回 `Content-Type: image/png`。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 未登录 | 1002 | 401 |
+| 文件超 2MB / 扩展名不符 / 魔数不符 / 缺 `file` 字段 | 1009 | 400 |
+
+```bash
+curl -X POST http://localhost:8080/api/upload \
+  -H "Authorization: Bearer $TOKEN" -F "file=@test.png"
+```
+
+---
+
+## 软鉴权（optional_auth）
+
+用于 `GET /api/posts/:id` 等对游客开放、但登录用户能看到额外信息的接口。
+
+| 情况 | 行为 |
+| --- | --- |
+| 无 `Authorization` 头 | 放行，不设 user（游客） |
+| 有头但 token 非法 / 过期 | **放行**，不设 user（降级为游客），**不返回 1002** |
+| 验签通过但用户已被删除 | 放行，不设 user |
+| 全部通过 | 校验并回查数据库，写入 context |
+
+> **为什么 token 失效不报 1002？** 详情页是公开内容，一个过期的 token 不应该
+> 让用户连帖子都打不开（表现为「分享链接给别人，自己反而看不了」）。
+> 真正需要重新登录的时刻，由前端在调用写操作接口时感知。
+
+---
+
 ## 待补章节（后续阶段）
 
-- 帖子模块（搜索 / 分页 / 三级联系方式可见性 / 状态机）
-- 上传模块（白名单与体积校验）
-- 认领模块（审核 / 凭证码 / 核销联动）
-- AI 智能匹配（2-gram 相似度打分）
+- 帖子列表（搜索 / 分页 / 筛选）—— P3
+- 状态流转 `PATCH /api/posts/:id/status` —— P3
+- 认领模块（审核 / 凭证码 / 核销联动）—— P6
+- AI 智能匹配（2-gram 相似度打分）—— P6
