@@ -11,9 +11,14 @@ import (
 
 	"hdu-lostfound/internal/config"
 	"hdu-lostfound/internal/db"
+	"hdu-lostfound/internal/handler"
 	"hdu-lostfound/internal/middleware"
+	"hdu-lostfound/internal/model"
 	"hdu-lostfound/internal/pkg/apperr"
+	"hdu-lostfound/internal/pkg/jwtutil"
 	"hdu-lostfound/internal/pkg/response"
+	"hdu-lostfound/internal/service"
+	"hdu-lostfound/internal/store"
 )
 
 // New 组装中间件链与路由表并返回可用的 *gin.Engine。
@@ -42,13 +47,60 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 		response.Fail(c, apperr.New(apperr.CodeNotFound))
 	})
 
+	// ===== 依赖装配 =====
+	// 依赖在 router 一处集中构造并向下传递，避免各层自行 new 出隐藏的耦合。
+	// 目前规模不值得引入 DI 框架，显式手工装配反而更易读。
+	userStore := store.NewUserStore(pool)
+	tokenManager := jwtutil.NewManager(cfg.JWTSecret, cfg.JWTExpireHours)
+
+	authService := service.NewAuthService(userStore, tokenManager)
+	userService := service.NewUserService(userStore)
+
+	authHandler := handler.NewAuthHandler(authService)
+	userHandler := handler.NewUserHandler(userService)
+
+	// 鉴权中间件需要「按 id 回查用户」，这里把 AuthService 适配成中间件的窄接口，
+	// 让 middleware 包不必依赖 service 包（依赖方向保持单向：router → 全部）。
+	loader := &authLoader{auth: authService}
+
 	api := engine.Group("/api")
 	{
 		api.GET("/health", healthHandler(pool))
+
+		// 公开接口：无需登录
+		api.POST("/auth/register", authHandler.Register)
+		api.POST("/auth/login", authHandler.Login)
+
+		// 受保护接口：必须携带合法 Bearer token
+		authed := api.Group("", middleware.Auth(tokenManager, loader))
+		{
+			authed.POST("/auth/logout", authHandler.Logout)
+			authed.GET("/users/me", userHandler.Me)
+			authed.PATCH("/users/me", userHandler.UpdateMe)
+		}
 	}
 
 	return engine
 }
+
+// authLoader 把 *service.AuthService 适配为 middleware.UserLoader。
+//
+// 存在的意义是隔离依赖方向：middleware 包只认窄接口，
+// 不需要 import service，从而避免包依赖成环。
+type authLoader struct {
+	auth *service.AuthService
+}
+
+// Authenticate 实现 middleware.UserLoader。
+//
+// 把 gin.Context 上的 *http.Request 转成 context.Context 传给 service，
+// 让数据库调用能随请求取消 —— 这也是 SPEC 3.3「DB 调用必须带 context」的落地。
+func (l *authLoader) Authenticate(c *gin.Context, userID int64) (*model.User, error) {
+	return l.auth.Authenticate(c.Request.Context(), userID)
+}
+
+// 编译期断言：确保 authLoader 满足中间件契约。
+var _ middleware.UserLoader = (*authLoader)(nil)
 
 // healthHandler 真实探测数据库连通性。
 //

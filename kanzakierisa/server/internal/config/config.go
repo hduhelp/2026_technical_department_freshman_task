@@ -59,11 +59,11 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppPort:   getInt("APP_PORT", 8080),
-		AppEnv:    getString("APP_ENV", "development"),
-		DBHost:    getString("DB_HOST", ""),
-		DBPort:    getString("DB_PORT", ""),
-		DBUser:    getString("DB_USER", ""),
+		AppPort:    getInt("APP_PORT", 8080),
+		AppEnv:     getString("APP_ENV", "development"),
+		DBHost:     getString("DB_HOST", ""),
+		DBPort:     getString("DB_PORT", ""),
+		DBUser:     getString("DB_USER", ""),
 		DBPassword: getString("DB_PASSWORD", ""),
 		DBName:     getString("DB_NAME", ""),
 

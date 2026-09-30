@@ -2,6 +2,7 @@
 # 用法：make <target>
 
 MYSQL ?= mysql
+MYSQL_FLAGS ?= --default-character-set=utf8mb4
 DB_USER ?= root
 DB_NAME ?= lost_found
 
@@ -31,11 +32,11 @@ tidy: ## 整理依赖
 
 .PHONY: schema
 schema: ## 导入建表脚本（会删表重建）
-	$(MYSQL) -u$(DB_USER) -p < sql/schema.sql
+	$(MYSQL) $(MYSQL_FLAGS) -u$(DB_USER) -p < sql/schema.sql
 
 .PHONY: seed
 seed: ## 导入演示数据
-	$(MYSQL) -u$(DB_USER) -p < sql/seed.sql
+	$(MYSQL) $(MYSQL_FLAGS) -u$(DB_USER) -p < sql/seed.sql
 
 .PHONY: up
 up: ## 用 docker compose 启动 MySQL
