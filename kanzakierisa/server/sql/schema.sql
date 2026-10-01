@@ -1,3 +1,12 @@
+-- 把本次会话的时区钉在 UTC。
+--
+-- 为什么必须写：users / posts / claims 的 created_at、updated_at 用的是
+-- DEFAULT CURRENT_TIMESTAMP，MySQL 按**会话时区**求值。若会话时区是 SYSTEM
+-- （本机为 +08），写进库的就是本地墙上时间，而 Go 侧 DSN 用 loc=UTC 解析，
+-- 结果整整快 8 小时（SPEC 第 6 章要求「所有时间字段存 UTC」）。
+-- 应用侧的连接已经在 DSN 里指定 time_zone='+00:00'，这里保证直接用 SQL 导入时同样成立。
+SET time_zone = '+00:00';
+
 CREATE DATABASE IF NOT EXISTS lost_found
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE lost_found;

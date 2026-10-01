@@ -31,6 +31,11 @@
 
 USE lost_found;
 
+-- 与本文件里的 UTC_TIMESTAMP() 保持同一口径：会话时区钉在 UTC。
+-- 下面 users 一行没有显式给 created_at，走的是 DEFAULT CURRENT_TIMESTAMP，
+-- 不钉时区的话它的 created_at 会比真实 UTC 快 8 小时（详见 schema.sql 顶部说明）。
+SET time_zone = '+00:00';
+
 -- 先按外键依赖倒序清空，保证可重复执行。
 DELETE FROM claims;
 DELETE FROM posts;

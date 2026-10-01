@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -122,11 +123,22 @@ func (c *Config) validate() error {
 //
 // parseTime=true 让 DATETIME 直接扫描进 time.Time；
 // loc=UTC 保证时区语义统一（否则 DATETIME 会按本地时区解析，导致前端差 8 小时）。
+//
+// ⚠️ 额外补一个 time_zone='+00:00'，这一项是必需的、不能省：
+// loc=UTC 只影响**驱动解析** DATETIME 的方式，并不会改变 MySQL 会话时区。
+// 而 created_at / updated_at 用的是 DEFAULT CURRENT_TIMESTAMP / ON UPDATE
+// CURRENT_TIMESTAMP，MySQL 按**会话时区**求值。若会话时区是 SYSTEM（本机为 +08），
+// 写进库里的就是本地墙上时间，再被 loc=UTC 当成 UTC 解析 —— 结果整整快 8 小时，
+// 前端会把刚发布的帖子显示成"未来时间"。
+// 把会话时区也钉在 UTC，读写两端才真正对上 SPEC 第 6 章「所有时间字段存 UTC」。
+//
+// 注意取值的写法：MySQL 的 time_zone 需要带引号的字符串字面量，
+// 即 SET time_zone='+00:00'，所以这里要把引号一起做 URL 编码（%27...%27）。
 func (c *Config) DSN() string {
 	return fmt.Sprintf(
 		"%s:%s@tcp(%s:%s)/%s?parseTime=true&loc=UTC&charset=utf8mb4&collation=utf8mb4_unicode_ci",
 		c.DBUser, c.DBPassword, c.DBHost, c.DBPort, c.DBName,
-	)
+	) + "&time_zone=" + url.QueryEscape("'+00:00'")
 }
 
 // getString 读取字符串环境变量，缺失或为空时返回默认值。
