@@ -6,6 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/jmoiron/sqlx"
+
 	"hdu-lostfound/internal/model"
 	"hdu-lostfound/internal/pkg/apperr"
 	"hdu-lostfound/internal/pkg/valid"
@@ -34,11 +36,19 @@ const (
 type PostService struct {
 	posts *store.PostStore
 	users *store.UserStore
+	// claims 只为「详情接口附上我自己的认领」（my_claim）而存在。
+	//
+	// 为什么不把这件事交给 handler 去调 ClaimService：那样 handler 就从
+	// 「HTTP 编解码」变成了「编排两个服务」，而 SPEC 3.3 要求 handler 薄到底。
+	// 反过来让 PostService 依赖 ClaimStore 也不理想（帖子服务关心认领），
+	// 但 my_claim 在语义上确实是「帖子详情这个响应的一部分」，
+	// 由构造该响应的服务负责补齐，比让调用方拼装更不容易漏。
+	claims *store.ClaimStore
 }
 
 // NewPostService 创建帖子服务。
-func NewPostService(posts *store.PostStore, users *store.UserStore) *PostService {
-	return &PostService{posts: posts, users: users}
+func NewPostService(posts *store.PostStore, users *store.UserStore, claims *store.ClaimStore) *PostService {
+	return &PostService{posts: posts, users: users, claims: claims}
 }
 
 // Create 创建帖子（SPEC 03 要点 4）。
@@ -146,12 +156,30 @@ func (s *PostService) Detail(ctx context.Context, postID int64, view model.PostV
 //
 // 注意把 view.ViewerID 一路传给 store：联系方式是否可见是在 SQL 层
 // 决定的（SPEC 7.2），store 需要知道「这次是替谁查的」。
+//
+// P6 在此补上 my_claim（07 §5）：请求者已登录时，顺带查出他自己在这张
+// 帖子上提交的那条认领。这里是唯一需要它的地方，因为只有详情接口
+// 才需要把「我在这个帖子上的状态」渲染成具体 CTA。
 func (s *PostService) detailByID(ctx context.Context, postID int64, view model.PostView) (*model.PostDTO, error) {
 	p, err := s.posts.GetByID(ctx, postID, view.ViewerID)
 	if err != nil {
 		return nil, err
 	}
-	return model.ToPostDTO(p, view), nil
+
+	dto := model.ToPostDTO(p, view)
+
+	// 游客（ViewerID = 0）没有认领记录可言，连查询都省掉。
+	if view.ViewerID != 0 {
+		mine, err := s.claims.GetByPostAndClaimant(ctx, postID, view.ViewerID)
+		if err != nil {
+			return nil, apperr.Wrap(apperr.CodeInternal, err)
+		}
+		// 没申请过时 mine 为 nil，ToMyClaimDTO 同样返回 nil ——
+		// 响应里 my_claim 就是 null，前端据此显示「可以认领」。
+		dto.MyClaim = model.ToMyClaimDTO(mine)
+	}
+
+	return dto, nil
 }
 
 // applyFields 校验并写入帖子的可编辑字段。
@@ -359,7 +387,9 @@ func (s *PostService) List(ctx context.Context, f ListFilter, view model.PostVie
 		return nil, 0, apperr.Wrap(apperr.CodeInternal, err)
 	}
 
-	rows, err := s.posts.List(ctx, f, limit, offset)
+	// viewerID 必须传：它是 contact_visible 这条规则的输入之一，
+	// 少了它，登录用户在列表里会看到「联系方式不可见」的错误提示。
+	rows, err := s.posts.List(ctx, f, view.ViewerID, limit, offset)
 	if err != nil {
 		return nil, 0, apperr.Wrap(apperr.CodeInternal, err)
 	}
@@ -383,7 +413,7 @@ func (s *PostService) ListMine(ctx context.Context, userID int64, status string,
 		return nil, 0, apperr.Wrap(apperr.CodeInternal, err)
 	}
 
-	rows, err := s.posts.ListByUser(ctx, userID, f.Status, limit, offset)
+	rows, err := s.posts.ListByUser(ctx, userID, f.Status, view.ViewerID, limit, offset)
 	if err != nil {
 		return nil, 0, apperr.Wrap(apperr.CodeInternal, err)
 	}
@@ -416,7 +446,8 @@ func (s *PostService) ChangeStatus(ctx context.Context, postID, userID int64, to
 	if existing.UserID != userID {
 		return nil, apperr.New(apperr.CodeForbidden)
 	}
-	if err := s.applyStatusChange(ctx, existing, to); err != nil {
+	// tx 传 nil：作者手动流转是单条 UPDATE，不涉及跨表原子性。
+	if err := s.applyStatusChange(ctx, nil, existing, to); err != nil {
 		return nil, err
 	}
 
@@ -427,23 +458,38 @@ func (s *PostService) ChangeStatus(ctx context.Context, postID, userID int64, to
 
 // changeStatusAsSystem 由**系统**触发状态流转（不做作者校验）。
 //
-// P6 的认领流程要用它：审核通过 → 帖子 open 自动变 matched；
+// P6 的认领流程用它：审核通过 → 帖子 open 自动变 matched；
 // 核销 → 帖子自动变 closed。这类流转的发起者是业务规则而非某个人的点击，
 // 所以不能走 ChangeStatus 的作者校验，但**必须复用 ValidateTransition**，
 // 不允许在认领服务里再写一份状态规则。
 //
-// P3 阶段尚无调用方，按阶段文件 04 §7 的接口约定先落地，P6 直接接入。
-func (s *PostService) changeStatusAsSystem(ctx context.Context, postID int64, to string) error {
-	existing, err := s.posts.GetByID(ctx, postID, 0)
+// ⚠️ tx 参数是 P6 加的（07 §3 原文写的是 changeStatusAsSystem(ctx, postID, to)，
+// 没有事务）。原因是认领审核要求「写 claims 与联动改 posts 在同一个事务里」，
+// 而原来那个版本走的是连接池，在事务内改调它会有两个后果：
+//
+//  1. 那条 UPDATE 跑在事务之外，事务回滚时它不会跟着回滚 ——
+//     claims 被回滚了，帖子却已经变成 matched，留下一个无法自愈的脏状态；
+//  2. 同一行的写锁由两个连接争抢，极易演变成锁等待甚至死锁。
+//
+// 于是把执行句柄**参数化**而不是另写一个函数：白名单校验与乐观锁仍然
+// 只有下面一份实现（07 要求的「复用同一套白名单」被完整保留），
+// 只是调用方现在必须显式回答「这次在不在事务里」。
+//
+// tx 为 nil 表示不在事务中（当前没有这种调用方，保留是为了让这个
+// 「系统流转」入口对将来的定时任务 / 管理后台可用）。
+func (s *PostService) changeStatusAsSystem(ctx context.Context, tx *sqlx.Tx, postID int64, to string) error {
+	existing, err := s.posts.GetByIDWith(ctx, s.posts.Handle(tx), postID, 0)
 	if err != nil {
 		return err
 	}
-	return s.applyStatusChange(ctx, existing, to)
+	return s.applyStatusChange(ctx, tx, existing, to)
 }
 
 // applyStatusChange 是「作者手动流转」与「系统自动流转」共用的核心：
 // 白名单校验 + 乐观锁更新。两条路径共用它，状态规则就只可能有一份。
-func (s *PostService) applyStatusChange(ctx context.Context, p *model.Post, to string) error {
+//
+// tx 语义同 changeStatusAsSystem：nil 表示走连接池。
+func (s *PostService) applyStatusChange(ctx context.Context, tx *sqlx.Tx, p *model.Post, to string) error {
 	if err := ValidateTransition(p.Status, to); err != nil {
 		return err
 	}
@@ -455,7 +501,7 @@ func (s *PostService) applyStatusChange(ctx context.Context, p *model.Post, to s
 	// 出一个比当前时间还晚的 updated_at。
 	now := time.Now().UTC().Truncate(time.Second)
 
-	n, err := s.posts.UpdateStatus(ctx, p.ID, p.Status, to, now)
+	n, err := s.posts.UpdateStatusWith(ctx, s.posts.Handle(tx), p.ID, p.Status, to, now)
 	if err != nil {
 		return apperr.Wrap(apperr.CodeInternal, err)
 	}

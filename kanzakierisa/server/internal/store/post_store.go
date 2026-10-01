@@ -31,31 +31,58 @@ const postFromClause = `
 	FROM posts p
 	JOIN users u ON u.id = p.user_id`
 
+// viewerActiveClaimExistsSQL 是 SPEC 7.2 规则 4 的判定表达式：
+// 「该帖子下存在一条 approved/redeemed 且申请人就是当前请求者的认领记录」。
+//
+// 它是一个相关子查询，唯一的 ? 是 viewerID。抽成常量是为了让下面
+// 两处用法（一列、一分支）**共用同一段文本**：
+// 若两处各写一遍，将来改了状态集合（例如新增一种「已成立」的状态）
+// 只改一处，就会出现「contact_visible 说可见、contact 却是空串」
+// 这种自相矛盾的响应。
+//
+// 走 idx_post_status(post_id, status) 与 idx_claimant(claimant_id)，
+// 不会退化成全表扫。
+const viewerActiveClaimExistsSQL = `EXISTS(
+			SELECT 1 FROM claims c
+			WHERE c.post_id = p.id
+			  AND c.claimant_id = ?
+			  AND c.status IN ('approved', 'redeemed')
+		)`
+
 // contactCaseSQL 在 **SQL 层**决定是否把 u.contact 带进结果集（SPEC 7.2 硬要求）。
 //
 // SPEC 7.2 明确要求「在 SQL 层决定是否 SELECT contact，不要查出来再在内存里删」。
 // 这里把可见性判断写进 SELECT 列表：不可见的行直接返回空串，
 // 真实联系方式根本不会离开数据库、更不会进入应用内存。
 //
-// 两个 ? 都是 viewerID：
-//   - 第一个用于「请求者就是作者本人」；
-//   - 第二个用于「作者已主动公开（且请求者是登录用户）」。
+// 分支顺序即 SPEC 7.2 的判定顺序（任一条命中即返回，后面的不再求值）：
 //
-// ⚠️ 参数顺序敏感：本片段出现在 WHERE 之前，因此追加参数时必须
-// 先 append contactCaseArgs(viewerID)，再 append WHERE 的参数。
+//	1. u.id = ?                            → 请求者就是作者本人
+//	2. u.contact_public = 1 AND ? > 0      → 作者主动公开（且请求者是登录用户）
+//	3. EXISTS(claims ... approved/redeemed) → 双方存在已通过的认领关系（P6 接入）
+//	4. 其余                                 → 空串
 //
-// 待补：SPEC 7.2 规则 4「双方存在已通过的认领关系」需要 EXISTS(claims ...)，
-// 属于 P6 认领模块；届时在此 CASE 中追加一个分支即可，对外语义不变。
-const contactCaseSQL = `,
+// ⚠️ 这里的 `? > 0` 不能省：contact_public 表达的是「对所有**登录用户**公开」，
+// 游客（viewerID = 0）不在此列。没有这个条件，一条 u.id = 0 的
+// 不存在的用户会和「作者本人」分支混淆。
+//
+// viewerID <= 0 时（游客 / 只关心权限的内部调用）第 3 个分支**根本不出现在
+// SQL 里**：条件恒假，带上它只会让数据库白做一次子查询。
+// 这与 SPEC 10「只允许拼接固定 SQL 片段」并不冲突 —— 拼进去的仍然是
+// 硬编码常量，用户的输入值始终走 ? 占位符。
+func contactCaseSQL(viewerID int64) string {
+	sql := `,
 	CASE
 		WHEN u.id = ? THEN u.contact
-		WHEN u.contact_public = 1 AND ? > 0 THEN u.contact
+		WHEN u.contact_public = 1 AND ? > 0 THEN u.contact`
+	if viewerID > 0 {
+		sql += `
+		WHEN ` + viewerActiveClaimExistsSQL + ` THEN u.contact`
+	}
+	sql += `
 		ELSE ''
 	END AS author_contact`
-
-// contactCaseArgs 返回 contactCaseSQL 所需的参数（viewerID 需重复一次）。
-func contactCaseArgs(viewerID int64) []any {
-	return []any{viewerID, viewerID}
+	return sql
 }
 
 // postSelectColumns 返回帖子查询的 SELECT 列清单（含 JOIN users 带出的作者字段）。
@@ -69,18 +96,58 @@ func contactCaseArgs(viewerID int64) []any {
 //     减少一次批量查询里的泄露面；
 //   - 更新 / 删除 / 状态流转只需要 user_id 与 status，更不需要它。
 //
-// author_contact_public 则始终带出 —— 它是可见性判定的输入（用来算
-// contact_visible），本身不是敏感值。
-func postSelectColumns(withContact bool) string {
+// viewer_has_approved_claim 则**始终**带出：它是 contact_visible 这个
+// 对外字段的判定输入（SPEC 7.2），列表接口虽然不带 contact，
+// 但仍要如实告诉前端「按规则本该可见」——前端据此渲染不同的提示文案。
+// 与 author_contact_public 一样，它本身不是敏感值，只是一个布尔。
+//
+// 游客（viewerID <= 0）下写成字面量 0 而不是子查询：不存在「游客的认领」，
+// 求值一次纯属浪费，且会在每条列表记录上各跑一次。
+func postSelectColumns(withContact bool, viewerID int64) string {
 	cols := `
 	p.id, p.user_id, p.type, p.title, p.category, p.location, p.happened_at,
 	p.description, p.images, p.status, p.created_at, p.updated_at,
 	u.id AS author_id, u.nickname AS author_nickname,
 	u.contact_public AS author_contact_public`
+	if viewerID > 0 {
+		cols += `,
+	` + viewerActiveClaimExistsSQL + ` AS viewer_has_approved_claim`
+	} else {
+		cols += `,
+	0 AS viewer_has_approved_claim`
+	}
 	if withContact {
-		cols += contactCaseSQL
+		cols += contactCaseSQL(viewerID)
 	}
 	return cols
+}
+
+// postSelectArgs 返回 postSelectColumns 所产生的 ? 参数，顺序与 SQL 文本一致。
+//
+// ⚠️ 本函数与 postSelectColumns 是一对必须同步修改的孪生函数：
+// 每当列清单里增删一个 `?`，这里就必须跟着增删一个参数。
+// 之所以不合并成一个「返回 (sql, args)」的函数，是因为调用方还需要
+// 在列清单与 WHERE 之间插入 postFromClause，合并后反而更难读。
+//
+// 参数全部是同一个值（viewerID），所以就算顺序写反了也不会产生错误结果；
+// 但**个数**必须严格对上，否则 MySQL 会报
+// "sql: expected N arguments, got M"，属于上线即暴露的低级错误。
+// 这也是把这段逻辑集中在一处、而不是散落到各个查询里的原因。
+func postSelectArgs(viewerID int64, withContact bool) []any {
+	args := make([]any, 0, 4)
+	if viewerID > 0 {
+		// viewer_has_approved_claim 的相关子查询
+		args = append(args, viewerID)
+	}
+	if withContact {
+		// contactCaseSQL 的前两个分支：u.id = ? 与 ? > 0
+		args = append(args, viewerID, viewerID)
+		if viewerID > 0 {
+			// contactCaseSQL 的第三个分支
+			args = append(args, viewerID)
+		}
+	}
+	return args
 }
 
 // Create 插入一条帖子，并把自增主键回填到 p.ID。
@@ -107,6 +174,24 @@ func (s *PostStore) Create(ctx context.Context, p *model.Post) (int64, error) {
 	return id, nil
 }
 
+// Handle 返回本次操作应当使用的数据库句柄。
+//
+// tx 非 nil 时用事务，否则用连接池。这是「service 决定业务边界、
+// store 决定数据访问细节」这条分工的接缝：service 知道「这几次写必须
+// 原子」，但不必知道 sqlx 有 DB / Tx 两种类型。
+//
+// 用法：
+//
+//	h := posts.Handle(tx)              // tx 可能为 nil
+//	posts.GetByIDWith(ctx, h, id, 0)
+//	posts.UpdateStatusWith(ctx, h, id, from, to, now)
+func (s *PostStore) Handle(tx *sqlx.Tx) Querier {
+	if tx != nil {
+		return tx
+	}
+	return s.db
+}
+
 // GetByID 按主键查询帖子，并联表带出作者昵称与联系方式。
 //
 // viewerID 决定 author_contact 是否真实带出（SPEC 7.2 的 SQL 层判定）：
@@ -115,14 +200,28 @@ func (s *PostStore) Create(ctx context.Context, p *model.Post) (int64, error) {
 //
 // 帖子不存在时返回 apperr 1004，不把 sql.ErrNoRows 漏给上层。
 func (s *PostStore) GetByID(ctx context.Context, id int64, viewerID int64) (*model.Post, error) {
-	query := `SELECT` + postSelectColumns(true) + postFromClause + `
+	return s.getByID(ctx, s.db, id, viewerID)
+}
+
+// GetByIDWith 是 GetByID 的「句柄由调用方指定」版本，供事务内使用。
+//
+// 用途：P6 的认领审核在同一个事务里先锁住 claim、再读帖子的当前状态，
+// 据此决定要不要触发状态联动。若这里改走连接池，读到的会是事务外的
+// 快照（且可能因等待行锁而阻塞到超时），事务的隔离性形同虚设。
+func (s *PostStore) GetByIDWith(ctx context.Context, q Querier, id int64, viewerID int64) (*model.Post, error) {
+	return s.getByID(ctx, q, id, viewerID)
+}
+
+// getByID 是 GetByID / GetByIDTx 共用的实现，句柄由调用方注入。
+func (s *PostStore) getByID(ctx context.Context, q Querier, id int64, viewerID int64) (*model.Post, error) {
+	query := `SELECT` + postSelectColumns(true, viewerID) + postFromClause + `
 		WHERE p.id = ?`
 
 	// SELECT 列表里的 ? 先于 WHERE 的 ?，参数顺序必须对应。
-	args := append(contactCaseArgs(viewerID), id)
+	args := append(postSelectArgs(viewerID, true), id)
 
 	var p model.Post
-	if err := s.db.GetContext(ctx, &p, query, args...); err != nil {
+	if err := q.GetContext(ctx, &p, query, args...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, apperr.Wrap(apperr.CodeNotFound, err)
 		}
@@ -229,21 +328,25 @@ func buildPostWhere(f ListFilter) (string, []any) {
 //
 // 不含 author_contact：列表接口一律不外带联系方式（见 postSelectColumns），
 // 但 contact_visible 仍按规则计算，前端据此决定卡片上显示「登录后可见」
-// 还是真实联系方式。
+// 还是真实联系方式。viewerID 因此必须传进来 —— 它是那条规则的输入之一，
+// 传 0（游客）会让所有联系方式的可见性判定退化成 false。
 //
 // ORDER BY 追加 p.id DESC 是为了**稳定排序**：created_at 列精度到秒，
 // 同一秒内创建的两条帖子若只按时间排序，MySQL 不保证两次查询的相对
 // 顺序一致，分页时就会表现为「第 1 页与第 2 页同时出现某条，另一条
 // 永远看不到」。加主键做次级排序键，顺序才是全局确定的。
-func (s *PostStore) List(ctx context.Context, f ListFilter, limit, offset int) ([]model.Post, error) {
-	where, args := buildPostWhere(f)
+func (s *PostStore) List(ctx context.Context, f ListFilter, viewerID int64, limit, offset int) ([]model.Post, error) {
+	where, whereArgs := buildPostWhere(f)
 
-	query := `SELECT` + postSelectColumns(false) + postFromClause + `
+	query := `SELECT` + postSelectColumns(false, viewerID) + postFromClause + `
 	` + where + `
 		ORDER BY p.created_at DESC, p.id DESC
 		LIMIT ? OFFSET ?`
 
-	// LIMIT 在前、OFFSET 在后，与 SQL 文本里占位符出现的先后严格一致。
+	// 三段参数的拼接顺序必须与 SQL 文本中 ? 出现的先后完全一致：
+	// SELECT 列清单 → WHERE → LIMIT/OFFSET。
+	args := postSelectArgs(viewerID, false)
+	args = append(args, whereArgs...)
 	args = append(args, limit, offset)
 
 	rows := make([]model.Post, 0, limit)
@@ -257,6 +360,12 @@ func (s *PostStore) List(ctx context.Context, f ListFilter, limit, offset int) (
 //
 // JOIN users 不会影响计数：posts.user_id 有外键指向 users.id，
 // INNER JOIN 既不会丢行也不会放大行数。
+//
+// ⚠️ 本方法不接收 viewerID，也**不能**改成用 postSelectColumns：
+// 计数只关心 WHERE 命中的行数，SELECT 列表里的联系方式相关列
+// （以及它们带来的 ? 参数）在这里既不参与语义，还会平白多扫一遍 claims。
+// List 与 Count 的口径一致性只依赖于两者共用 buildPostWhere，
+// 与 SELECT 列表无关。
 func (s *PostStore) Count(ctx context.Context, f ListFilter) (int64, error) {
 	where, args := buildPostWhere(f)
 
@@ -276,8 +385,44 @@ func (s *PostStore) Count(ctx context.Context, f ListFilter) (int64, error) {
 // 固定住，调用方就没有「忘记带上 user_id、把全站帖子当成我的」的机会。
 // 计数仍走 Count(ListFilter{UserID, Status})，两者条件由同一个
 // buildPostWhere 产出，口径一致。
-func (s *PostStore) ListByUser(ctx context.Context, userID int64, status string, limit, offset int) ([]model.Post, error) {
-	return s.List(ctx, ListFilter{UserID: userID, Status: status}, limit, offset)
+func (s *PostStore) ListByUser(ctx context.Context, userID int64, status string, viewerID int64, limit, offset int) ([]model.Post, error) {
+	return s.List(ctx, ListFilter{UserID: userID, Status: status}, viewerID, limit, offset)
+}
+
+// ListMatchCandidates 查询参与 AI 匹配打分的候选帖子（SPEC 7.4 / 07 第二部分）。
+//
+// 筛选条件全部由本方法固定，不接受调用方拼装：
+//
+//	type = ?        → 只取类型相反的帖子（lost 找 found，found 找 lost）
+//	status = 'open' → 已结束的帖子不可能再被认领，没有匹配价值
+//	id <> ?         → 排除自己（否则一张帖子会「匹配」到自己，score 100）
+//
+// 走 idx_type_status(type, status) 复合索引，不会全表扫。
+//
+// LIMIT 200 是**兜底而非分页**：打分的成本是 O(候选数 × 字段数 × gram 数)，
+// 在内存里做。没有上限的话，一个热门分类下的几千条 open 帖子会让
+// 单次请求变成一个可被放大的 CPU 消耗点。
+// 200 条 × 4 个维度的量级在毫秒内，同时对「最近发布的帖子优先」
+// 这一直觉也友好 —— ORDER BY created_at DESC 保证被截掉的是最老的帖子。
+//
+// 不含 author_contact（postSelectColumns(false, ...)）：匹配区块只是
+// 「看看有没有可能是我的东西」，不需要、也不应该顺带把别人的联系方式带出来。
+func (s *PostStore) ListMatchCandidates(
+	ctx context.Context, excludeID int64, oppositeType string, viewerID int64, limit int,
+) ([]model.Post, error) {
+	query := `SELECT` + postSelectColumns(false, viewerID) + postFromClause + `
+		WHERE p.type = ? AND p.status = 'open' AND p.id <> ?
+		ORDER BY p.created_at DESC
+		LIMIT ?`
+
+	args := postSelectArgs(viewerID, false)
+	args = append(args, oppositeType, excludeID, limit)
+
+	rows := make([]model.Post, 0, limit)
+	if err := s.db.SelectContext(ctx, &rows, query, args...); err != nil {
+		return nil, fmt.Errorf("查询匹配候选失败: %w", err)
+	}
+	return rows, nil
 }
 
 // UpdateStatus 以乐观锁方式更新帖子状态，返回受影响行数。
@@ -296,12 +441,27 @@ func (s *PostStore) ListByUser(ctx context.Context, userID int64, status string,
 // 与「状态已被改」两种可能，两者该映射成哪个错误码属于业务语义，
 // 交由 service 结合已查出的帖子判断，store 不越权下结论。
 func (s *PostStore) UpdateStatus(ctx context.Context, postID int64, from, to string, now time.Time) (int64, error) {
+	return s.updateStatus(ctx, s.db, postID, from, to, now)
+}
+
+// UpdateStatusWith 是 UpdateStatus 的「句柄由调用方指定」版本。
+//
+// 用途：P6 的「审核通过 → 帖子自动置 matched」「核销 → 帖子自动置 closed」
+// 必须与 claims 的更新在**同一个事务**里提交。若这里改走连接池，
+// 会出现两种脏状态：claims 写成功了但帖子没改（认领通过了帖子还在招领），
+// 或者反过来。这些状态对用户是可见的，且无法自动修复。
+func (s *PostStore) UpdateStatusWith(ctx context.Context, q Querier, postID int64, from, to string, now time.Time) (int64, error) {
+	return s.updateStatus(ctx, q, postID, from, to, now)
+}
+
+// updateStatus 是 UpdateStatus / UpdateStatusTx 共用的实现。
+func (s *PostStore) updateStatus(ctx context.Context, q Querier, postID int64, from, to string, now time.Time) (int64, error) {
 	const query = `
 		UPDATE posts
 		SET status = ?, updated_at = ?
 		WHERE id = ? AND status = ?`
 
-	res, err := s.db.ExecContext(ctx, query, to, now, postID, from)
+	res, err := q.ExecContext(ctx, query, to, now, postID, from)
 	if err != nil {
 		return 0, fmt.Errorf("更新帖子状态失败: %w", err)
 	}

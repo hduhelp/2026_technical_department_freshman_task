@@ -18,6 +18,15 @@ export const POST_STATUS = [
   { value: 'closed', label: '已结束', color: 'default' },
 ]
 
+// 认领状态：与后端 `valid.ClaimStatusPending` 等常量同源。
+// `color` 直接就是 Vant Tag 的 type，故没有 'rejected' → 'danger' 之外的自定义色。
+export const CLAIM_STATUS = [
+  { value: 'pending', label: '待审核', color: 'warning' },
+  { value: 'approved', label: '已通过', color: 'success' },
+  { value: 'rejected', label: '已拒绝', color: 'danger' },
+  { value: 'redeemed', label: '已交接', color: 'default' },
+]
+
 // 物品分类
 export const CATEGORIES = [
   { value: 'card', label: '校园卡' },

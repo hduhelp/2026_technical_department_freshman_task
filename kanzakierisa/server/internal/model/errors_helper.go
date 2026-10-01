@@ -12,10 +12,23 @@ import (
 // 1062 = ER_DUP_ENTRY。
 const mysqlErrDuplicateEntry = 1062
 
-// users 表上的唯一索引名（见 sql/schema.sql）。
+// 表上的唯一索引名（见 sql/schema.sql）。
+//
+// 这些字符串不是「随手写的名字」，而是 MySQL 1062 报错信息里的子串，
+// 用它们做判定就等于直接依赖 DDL 里的索引名 —— 改索引名会让判定静默失效，
+// 因此 schema.sql 与本清单必须同步修改。
 const (
-	// IndexUsersUsername 对应 uk_username。
+	// IndexUsersUsername 对应 users.uk_username。
 	IndexUsersUsername = "uk_username"
+	// IndexClaimsVoucherCode 对应 claims.uk_voucher_code，
+	// 凭证码生成后唯一性校验的失败依据（命中即重新生成）。
+	IndexClaimsVoucherCode = "uk_voucher_code"
+	// IndexClaimsPostClaimant 对应 claims.uk_post_claimant，
+	// 「同一用户对同一帖子只能有一条认领记录」的数据库兜底。
+	IndexClaimsPostClaimant = "uk_post_claimant"
+	// IndexClaimsPostApproved 对应 claims.uk_post_approved，
+	// 「一个帖子最多一条通过记录」的数据库兜底（配合 approved_flag 生成列）。
+	IndexClaimsPostApproved = "uk_post_approved"
 )
 
 // IsDuplicateEntry 判断 error 是否为 MySQL 唯一键冲突（errno 1062）。

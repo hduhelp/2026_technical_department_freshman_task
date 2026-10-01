@@ -28,6 +28,25 @@ const (
 	CategoryOther   = "other"
 )
 
+// 认领状态枚举（SPEC 6.1 claims.status 的列注释）。
+//
+//	pending  待审核
+//	approved 已通过（此时生成凭证码，帖子被联动置 matched）
+//	rejected 已拒绝（可带 reject_reason）
+//	redeemed 已交接（帖子被联动置 closed）
+const (
+	ClaimStatusPending  = "pending"
+	ClaimStatusApproved = "approved"
+	ClaimStatusRejected = "rejected"
+	ClaimStatusRedeemed = "redeemed"
+)
+
+// 审核动作枚举（PATCH /api/claims/:id 的 action 字段）。
+const (
+	ClaimActionApprove = "approve"
+	ClaimActionReject  = "reject"
+)
+
 // 三个枚举白名单，与 SPEC 第 6.1 节 DDL 的列注释一一对应。
 var (
 	// ValidTypes 是合法的帖子类型集合。
@@ -36,7 +55,24 @@ var (
 	ValidCategories = []string{CategoryCard, CategoryDigital, CategoryBook, CategoryKey, CategoryClothes, CategoryOther}
 	// ValidStatuses 是合法的帖子状态集合。
 	ValidStatuses = []string{StatusOpen, StatusMatched, StatusClosed}
+	// ValidClaimStatuses 是合法的认领状态集合。
+	ValidClaimStatuses = []string{ClaimStatusPending, ClaimStatusApproved, ClaimStatusRejected, ClaimStatusRedeemed}
+	// ValidClaimActions 是合法的审核动作集合。
+	ValidClaimActions = []string{ClaimActionApprove, ClaimActionReject}
 )
+
+// ClaimStatusesActive 是「认领关系已成立」的认领状态集合。
+//
+// 单独抽出一份的用途是让两条业务规则共用同一个定义，避免两处各写
+// `IN ('approved','redeemed')`：一旦将来新增一个「已成立」的状态，
+// 漏改任何一处的后果都很难自查 ——
+//
+//  1. SPEC 7.2 联系方式可见性的 hasApprovedClaim 判定；
+//  2. SPEC 7.3 规则 5「一个帖子最多一条通过记录」的应用层预检。
+//
+// 数据库侧对应的等价物是 claims.approved_flag 生成列，
+// 两侧的取值集合必须始终一致（见 sql/schema.sql）。
+var ClaimStatusesActive = []string{ClaimStatusApproved, ClaimStatusRedeemed}
 
 // Contains 判断 v 是否在 list 中（大小写敏感，枚举值均为小写固定字面量）。
 func Contains(list []string, v string) bool {

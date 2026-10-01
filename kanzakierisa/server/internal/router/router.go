@@ -52,16 +52,24 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 	// 目前规模不值得引入 DI 框架，显式手工装配反而更易读。
 	userStore := store.NewUserStore(pool)
 	postStore := store.NewPostStore(pool)
+	claimStore := store.NewClaimStore(pool)
 	tokenManager := jwtutil.NewManager(cfg.JWTSecret, cfg.JWTExpireHours)
 
 	authService := service.NewAuthService(userStore, tokenManager)
 	userService := service.NewUserService(userStore)
-	postService := service.NewPostService(postStore, userStore)
+	// 帖子服务多接一个 claimStore：详情接口要附上「我在这张帖子上的认领」。
+	postService := service.NewPostService(postStore, userStore, claimStore)
+	// 认领服务反向持有 postService：审核通过 / 核销要触发帖子状态联动，
+	// 而状态机的白名单与乐观锁实现在 PostService 里，必须复用而不是照抄。
+	claimService := service.NewClaimService(claimStore, postStore, postService)
+	matchService := service.NewMatchService(postStore)
 
 	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
 	postHandler := handler.NewPostHandler(postService)
 	uploadHandler := handler.NewUploadHandler(cfg)
+	claimHandler := handler.NewClaimHandler(claimService)
+	matchHandler := handler.NewMatchHandler(matchService)
 
 	// 鉴权中间件需要「按 id 回查用户」，这里把 AuthService 适配成中间件的窄接口，
 	// 让 middleware 包不必依赖 service 包（依赖方向保持单向：router → 全部）。
@@ -84,10 +92,13 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 		api.GET("/posts", postHandler.List)
 
 		// 软鉴权接口：登录与否都能访问，登录用户能拿到额外视角字段
-		// （本人可见的联系方式、can_edit / can_claim）。
+		// （本人可见的联系方式、can_edit / can_claim、my_claim）。
 		soft := api.Group("", middleware.OptionalAuth(tokenManager, loader))
 		{
 			soft.GET("/posts/:id", postHandler.Detail)
+			// 「可能匹配」也走软鉴权：游客能看到候选（不含联系方式），
+			// 登录用户能拿到 can_edit / can_claim。
+			soft.GET("/posts/:id/matches", matchHandler.List)
 		}
 
 		// 受保护接口：必须携带合法 Bearer token
@@ -98,12 +109,21 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 			authed.PATCH("/users/me", userHandler.UpdateMe)
 			// 「我的帖子」：user_id 固定取当前登录用户，不接受查询参数。
 			authed.GET("/users/me/posts", postHandler.ListMine)
+			// 「我发出的认领」：claimant_id 同样固定取当前登录用户。
+			authed.GET("/users/me/claims", claimHandler.ListMine)
 
 			authed.POST("/posts", postHandler.Create)
 			authed.PUT("/posts/:id", postHandler.Update)
 			authed.DELETE("/posts/:id", postHandler.Delete)
 			// 状态流转走 SPEC 7.1 白名单，仅作者可操作。
 			authed.PATCH("/posts/:id/status", postHandler.ChangeStatus)
+
+			// 认领链路：提交 → （仅帖主）查看 → 审核 → 核销。
+			// 权限校验全部在 service 层，路由只负责登记路径。
+			authed.POST("/posts/:id/claims", claimHandler.Apply)
+			authed.GET("/posts/:id/claims", claimHandler.ListByPost)
+			authed.PATCH("/claims/:id", claimHandler.Review)
+			authed.POST("/claims/:id/redeem", claimHandler.Redeem)
 
 			authed.POST("/upload", uploadHandler.Upload)
 		}

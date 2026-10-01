@@ -5,7 +5,7 @@
  * `new Date(iso)` 已经会自动按浏览器本地时区解析，**绝不能**再手动加减 8 小时，
  * 否则会出现「差 8 小时」的经典坑。
  */
-import { POST_TYPES, POST_STATUS, CATEGORIES } from '@/constants'
+import { CATEGORIES, CLAIM_STATUS, POST_STATUS, POST_TYPES } from '@/constants'
 
 const pad2 = (n) => String(n).padStart(2, '0')
 
@@ -72,5 +72,16 @@ export function typeColor(v) {
 /** 状态标签映射到 Vant Tag 的 type（warning / success / default） */
 export function statusTagType(v) {
   const hit = POST_STATUS.find((item) => item.value === v)
+  return hit ? hit.color : 'default'
+}
+
+/** `pending` → `待审核` */
+export function claimStatusLabel(v) {
+  return pickLabel(CLAIM_STATUS, v)
+}
+
+/** 认领状态映射到 Vant Tag 的 type（warning / success / danger / default） */
+export function claimStatusTagType(v) {
+  const hit = CLAIM_STATUS.find((item) => item.value === v)
   return hit ? hit.color : 'default'
 }

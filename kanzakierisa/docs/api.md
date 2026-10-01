@@ -30,7 +30,7 @@
 | 0 | 200 | 成功 | — |
 | 1001 | 400 | 参数错误 | 请求体校验失败、路径参数非法、请求体中的枚举非法（**列表筛选参数不适用**，见「列表接口通用约定」） |
 | 1002 | 401 | 未登录或凭证失效 | 缺 token / 验签失败 / 过期 / 用户已不存在 |
-| 1003 | 403 | 无权限 | 改别人的帖子、非帖主审核 |
+| 1003 | 403 | 无权限 | 改/删别人的帖子、非帖主查看认领列表（admin 也不行）、非帖主且非 admin 审核、非帖主核销 |
 | 1004 | 404 | 资源不存在 | 帖子 / 认领 / 用户不存在 |
 | 1005 | 409 | 用户名已被占用 | 注册重名 |
 | 1006 | 401 | 用户名或密码错误 | 登录失败（**不区分二者**，防用户名枚举） |
@@ -81,12 +81,12 @@
 | 帖子 | PATCH `/api/posts/:id/status` | 是 | `{status}`，仅作者，走状态机白名单 | P3 ✅ |
 | 帖子 | GET `/api/users/me/posts` | 是 | `status?` `page` `pageSize` | P3 ✅ |
 | 上传 | POST `/api/upload` | 是 | `multipart/form-data`，字段名 `file` → `{url}` | P2 ✅ |
-| 认领 | POST `/api/posts/:id/claims` | 是 | `{proof}` | P6 |
-| 认领 | GET `/api/posts/:id/claims` | 是 | 仅帖主，返回该帖全部申请 | P6 |
-| 认领 | PATCH `/api/claims/:id` | 是 | `{action: "approve"\|"reject", reject_reason?}`，仅帖主或 admin | P6 |
-| 认领 | GET `/api/users/me/claims` | 是 | 我发出的认领；`page` `pageSize` | P6 |
-| 认领 | POST `/api/claims/:id/redeem` | 是 | `{voucher_code}`，仅帖主；核销后帖子置 `closed` | P6 |
-| 匹配 | GET `/api/posts/:id/matches` | 软鉴权 | 返回 `[{post, score, reasons[]}]`，最多 5 条 | P6 |
+| 认领 | POST `/api/posts/:id/claims` | 是 | `{proof}` | P6 ✅ |
+| 认领 | GET `/api/posts/:id/claims` | 是 | 仅帖主，返回该帖全部申请 | P6 ✅ |
+| 认领 | PATCH `/api/claims/:id` | 是 | `{action: "approve"\|"reject", reject_reason?}`，仅帖主或 admin | P6 ✅ |
+| 认领 | GET `/api/users/me/claims` | 是 | 我发出的认领；`page` `pageSize` | P6 ✅ |
+| 认领 | POST `/api/claims/:id/redeem` | 是 | `{voucher_code}`，仅帖主；核销后帖子置 `closed` | P6 ✅ |
+| 匹配 | GET `/api/posts/:id/matches` | 软鉴权 | 返回 `{list: [{post, score, reasons[]}]}`，最多 5 条 | P6 ✅ |
 
 > **静态资源**：`GET /uploads/<uuid>.<ext>` —— **不经过 `/api` 前缀**，也**不需要鉴权**（图片是公开资源）。
 > 由 `r.Static("/uploads", cfg.UploadDir)` 直接托管。
@@ -340,7 +340,8 @@ curl -X PATCH http://localhost:8080/api/users/me \
   "updated_at": "2026-09-30T11:00:00Z",
   "author": { "id": 1, "nickname": "小明", "contact": "", "contact_visible": false },
   "can_edit": true,
-  "can_claim": false
+  "can_claim": false,
+  "my_claim": null
 }
 ```
 
@@ -352,6 +353,31 @@ curl -X PATCH http://localhost:8080/api/users/me \
 - `can_claim`：是否满足认领的静态前置条件（`type=found`、非本人、`status≠closed`、已登录）；游客恒 `false`
 - `images` 为空时是 `[]`，**不是 `null`**（数据库列也存 `[]` 而非 NULL）
 - **列表接口中的差异**（P3）：`author.contact` 一律为 `""`，`contact_visible` 仍按规则计算
+
+### `my_claim`（P6 新增）
+
+「**当前请求者**在这张帖子上自己提交的那条认领」，只在 `GET /api/posts/:id` 返回，
+且请求者已登录时**可能非空**。没有申请过就是 `null`（**不加 `omitempty`**，
+字段时有时无会让前端多一个类型分支）。
+
+```json
+"my_claim": {
+  "id": 2,
+  "status": "approved",
+  "proof": "卡套背面确实有皮卡丘贴纸，我的学号尾号是 0421。",
+  "voucher_code": "K7M2QX",
+  "reject_reason": "",
+  "created_at": "2026-09-19T09:21:20Z",
+  "reviewed_at": "2026-09-19T10:21:20Z"
+}
+```
+
+> **为什么 `can_claim` 里不包含「我已经申请过」**：
+> `can_claim` 在**列表与详情**上语义完全一致（一个静态准入判断），
+> 而「我申请过没有、到哪一步了」这件事只有详情页才拿得到，所以交给 `my_claim` 承载。
+> 前端因此必须按 `my_claim` → `can_claim` 的**顺序**判断，否则已提交申请的人
+> 会看到「这是我的」而不是「认领审核中」。真正的准入始终由 `POST /api/posts/:id/claims`
+> 把关（重复提交 1008、已有通过认领 1010，都由数据库唯一索引保证）。
 
 ---
 
@@ -424,13 +450,19 @@ curl -X POST http://localhost:8080/api/posts \
 if viewer == 游客                    → false
 if viewer.ID == author.ID            → true   // 本人可见
 if author.contact_public             → true   // 作者主动公开
-if 双方存在已通过的认领关系           → true   // P6 接入，P3 恒 false
+if 双方存在已通过的认领关系           → true   // P6 已接入（status IN ('approved','redeemed')）
 otherwise                            → false
 ```
 
-> **实现在 SQL 层（P3）**：可见性判断被写进 SELECT 列表（`CASE WHEN ... THEN u.contact ELSE '' END`），
-> 不可见的行由数据库直接返回空串，**真实联系方式根本不会进入应用内存** ——
-> 而不是「先查出来再在内存里删掉」。列表接口更进一步，干脆不 SELECT 这一列。
+> **实现在 SQL 层（P3，P6 扩展第 4 条）**：可见性判断被写进 SELECT 列表
+> （`CASE WHEN ... THEN u.contact ELSE '' END`），不可见的行由数据库直接返回空串，
+> **真实联系方式根本不会进入应用内存** —— 而不是「先查出来再在内存里删掉」。
+> 列表接口更进一步，干脆不 SELECT 这一列。
+>
+> P6 新增的第 4 条分支用了一个相关子查询 `EXISTS (SELECT 1 FROM claims ... )`，
+> 它和 `contact_visible` 出自**同一条 SQL 语句**，因此不可能出现
+> 「`contact_visible=true` 但 `contact=""`」这种自相矛盾的响应。
+> 见下方 [联系方式可见性第 4 条](#联系方式的第-4-条规则p6)。
 
 响应中**同时**返回 `author.contact`（不可见时 `""`）与 `author.contact_visible`（bool），
 前端据此渲染不同 CTA。
@@ -839,8 +871,340 @@ P5 **没有**做「删除已上传图片」的接口，因此存在两种文件�
 
 ---
 
-## 待补章节（后续阶段）
+---
 
-- 认领模块（审核 / 凭证码 / 核销联动）—— P6
-- AI 智能匹配（2-gram 相似度打分，`GET /api/posts/:id/matches`）—— P6
-- 联系方式可见性规则第 4 条「双方存在已通过的认领关系」—— P6（需查 claims 表）
+## Claim（P6）
+
+认领记录。JSON 里**不会出现**数据库的 `approved_flag` 生成列（它不是业务字段）。
+
+```json
+{
+  "id": 2,
+  "post_id": 4,
+  "claimant_id": 1,
+  "proof": "卡套背面确实有皮卡丘贴纸，我的学号尾号是 0421。",
+  "status": "approved",
+  "voucher_code": "K7M2QX",
+  "reject_reason": "",
+  "created_at": "2026-09-19T09:21:20Z",
+  "reviewed_at": "2026-09-19T10:21:20Z",
+  "redeemed_at": null,
+  "claimant": { "id": 1, "nickname": "小明" },
+  "post": { "id": 4, "title": "捡到一张校园卡", "type": "found", "status": "matched" }
+}
+```
+
+- `claimant`：`GET /api/posts/:id/claims`（帖主视角）里有；`GET /api/posts/:id` 的 `my_claim` 里没有（调用者就是申请人，自己不需要被介绍给自己）
+- `post`：`GET /api/users/me/claims`（申请人视角）里有；帖主视角里是 `null`
+- `voucher_code`：**未通过时是 `null`，不是 `""`**。前端用 `v-if="claim.voucher_code"` 判断
+- `reviewed_at` / `redeemed_at`：未发生时为 `null`
+
+### 认领状态机
+
+```
+pending ──approve──→ approved ──redeem──→ redeemed     （终态）
+   └────reject────→ rejected                            （终态）
+```
+
+与帖子状态机的联动（都在同一个事务里完成）：
+
+| 认领动作 | 帖子状态 |
+| --- | --- |
+| `approve` | `open → matched`（already `matched` 则不动） |
+| `reject` | **不变** |
+| `redeem` | `matched → closed`，或 `open → closed` |
+
+> 帖子状态一律经 `ValidateTransition` 白名单流转 —— 认领流程**不自己写 SQL 改状态**，
+> 否则以后调整白名单就要改两处。见 [code-guide.md](./code-guide.md)。
+
+---
+
+## POST /api/posts/:id/claims
+
+提交认领申请。
+
+- 鉴权：**强制**
+- 申请人固定取当前登录用户，请求体里没有 `claimant_id`，带了也会在解码阶段被丢弃
+
+### 请求体
+
+```json
+{ "proof": "卡套背面有一张皮卡丘贴纸，我的学号尾号是 0421。" }
+```
+
+`proof` 为 **10–500 个字符**（按 rune 计，不是字节；一个汉字算 1 个）。
+
+### 响应 data
+
+一个 `Claim` 对象，`status` 恒为 `pending`，`voucher_code` 恒为 `null`。
+
+### 校验顺序（SPEC 7.3，故意固定）
+
+| # | 校验 | 失败 code |
+| --- | --- | --- |
+| 1 | `proof` 长度 10–500 | 1001 |
+| 2 | 帖子存在 | 1004 |
+| 3 | **帖子类型必须是 `found`** | 1001 |
+| 4 | 帖子未 `closed` | 1007 |
+| 5 | 不能认领自己发的帖 | 1001 |
+| 6 | 我没在这张帖上申请过 | 1008 |
+| 7 | 这张帖还没有已通过的认领 | 1010 |
+
+> **第 3 条排在第 4 条前面是刻意的**：对一条 `lost` 帖提交认领，要拿到的是
+> 「只能认领招领帖」这个语义（1001），而不是「帖子已结束」（1007）。
+> 两者对 `lost + closed` 的帖会给出不同答案，07 的验收清单同时覆盖了这两种输入，
+> 只有这个顺序能同时满足。
+>
+> 第 6 / 7 条在应用层是**预检**（为了给出友好文案），真正的保证来自数据库唯一索引
+> `uk_post_claimant` 与 `uk_post_approved` —— 并发下重复提交会撞 1062，
+> store 层再把 1062 翻译成 1008 / 1010。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| proof 少于 10 字 / 超过 500 字 | 1001 | 400 |
+| 帖子不是 `found` | 1001 | 400 |
+| 认领自己的帖子 | 1001 | 400 |
+| 未登录 | 1002 | 401 |
+| 帖子不存在 | 1004 | 404 |
+| 帖子已结束（`closed`） | 1007 | 409 |
+| 我已提交过认领 | 1008 | 409 |
+| 该帖已有通过/已核销的认领 | 1010 | 409 |
+
+```bash
+curl -s -X POST $BASE/posts/5/claims -H "Authorization: Bearer $ALICE" \
+  -H 'Content-Type: application/json' \
+  -d '{"proof":"钥匙串上确实有棕色小熊挂件，第 3 把钥匙刻了 302 字样。"}'
+# → {"code":0,...,"data":{"status":"pending","voucher_code":null,...}}
+```
+
+---
+
+## GET /api/posts/:id/claims
+
+某帖的全部认领申请，按 `created_at DESC` 排序。
+
+- 鉴权：**强制**
+- 权限：**仅帖主**。非帖主（**包括 admin**）一律 `1003`
+
+> ⚠️ **与 07 §5 的一处冲突**：07 写的是「仅帖主（或 admin）」，SPEC 8.4 写的是「仅帖主」。
+> 按 SPEC 开篇「本文件是唯一真源」取「仅帖主」，且 07 自己的验收清单第 6 条也要求
+> 「carol（seed 里 `role=admin`）查 bob 帖子的认领列表 → 1003」，两份证据同向。
+> 注意与 `PATCH /api/claims/:id` 的**刻意不对称**：审核允许 admin，读取不允许 ——
+> 审核是处置事故，读取是窥探纠纷细节，两者不该共用一个权限口径。
+
+### 查询参数
+
+`page`（缺省 1）、`pageSize`（缺省 10，夹取到 1–50）。
+
+### 响应 data
+
+```json
+{
+  "list": [ /* Claim[]，claimant 有值、post 为 null、voucher_code 按需返回 */ ],
+  "page": 1, "pageSize": 10, "total": 1
+}
+```
+
+帖主属于 SPEC 8.3 允许看到凭证码的两类人之一，因此列表里**会**返回 `voucher_code`。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 非帖主（含 admin） | 1003 | 403 |
+| 未登录 | 1002 | 401 |
+| 帖子不存在 | 1004 | 404 |
+| 路径 id 非正整数 | 1001 | 400 |
+
+---
+
+## GET /api/users/me/claims
+
+我发出的全部认领。
+
+- 鉴权：**强制**
+- `claimant_id` 固定取当前登录用户，**不接受任何查询参数** ——
+  否则改一个 `?user_id=` 就能读到别人写下的认领证明
+
+### 查询参数
+
+`page`、`pageSize`。**没有 `status` 筛选**（SPEC 8.4 未定义），前端因此不做状态 Tab。
+
+### 响应 data
+
+同上的列表信封，每条带 `post` 摘要（`id` / `title` / `type` / `status`），
+调用者必然是申请人本人，因此 `voucher_code` 按需返回。
+
+---
+
+## PATCH /api/claims/:id
+
+审核认领申请。
+
+- 鉴权：**强制**
+- 权限：**仅帖主或 admin**
+
+### 请求体
+
+```json
+{ "action": "approve" }
+{ "action": "reject", "reject_reason": "物品特征描述不符" }
+```
+
+- `action` 必须是 `approve` 或 `reject`（`.TrimSpace()` 后比较）
+- `reject_reason` 可省略；超过 255 个字符按 rune **截断**而不是报错
+
+### 响应 data
+
+审核后的 `Claim` 对象。`approve` 时 `voucher_code` 是 6 位凭证码。
+
+### 行为
+
+- `approve`
+  1. 生成 6 位凭证码（字符集 `ABCDEFGHJKMNPQRSTUVWXYZ23456789`，**剔除 `0 O 1 I L`**）
+  2. `UPDATE ... WHERE id = ? AND status = 'pending'`
+  3. 若与已有凭证码撞唯一索引 `uk_voucher_code`，**重试至多 5 次**
+  4. 帖子 `open → matched`（经 `ValidateTransition`）
+  5. 整个流程在**一个事务**里，认领与帖子状态同生共死
+- `reject`
+  - 写入 `reject_reason` 与 `reviewed_at`，**不动帖子状态**
+
+> **并发安全**：进入事务后先 `SELECT ... FOR UPDATE` 把这条认领锁到事务结束，
+> 否则两个并发的审核请求会都读到 `pending`、都执行 `UPDATE`，
+> 最终谁后提交谁说了算，而两个请求都返回成功。
+>
+> **凭证码比较**：核销时用 `subtle.ConstantTimeCompare`，不用 `==`。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| `action` 不是 approve/reject | 1001 | 400 |
+| 该认领不是 `pending`（已处理过） | 1001 | 400 |
+| 未登录 | 1002 | 401 |
+| 非帖主且非 admin | 1003 | 403 |
+| 认领不存在 | 1004 | 404 |
+| 该帖已有通过/已核销的认领 | 1010 | 409 |
+
+---
+
+## POST /api/claims/:id/redeem
+
+核销凭证码，完成线下交接。
+
+- 鉴权：**强制**
+- 权限：**仅帖主**。这里**不给 admin 开口子** —— 核销是「东西真的交出去了」这个
+  线下事实的登记，管理员代登记会污染交接记录的可信度
+
+### 请求体
+
+```json
+{ "voucher_code": "K7M2QX" }
+```
+
+大小写不敏感（服务端会 `TrimSpace` + 转大写），但**不做形近字纠正** ——
+`0`/`O` 不会被当成同一个字符，避免把错误输入猜成正确答案。
+
+### 行为
+
+1. 校验认领属于这张帖、请求者是帖主、认领当前是 `approved`
+2. **恒定时间**比对凭证码，不匹配 → `1011`
+3. `UPDATE ... WHERE id = ? AND status = 'approved'` → `redeemed`，写 `redeemed_at`
+4. 帖子 → `closed`
+5. 事务提交
+
+### 响应 data
+
+核销后的 `Claim` 对象，`status = "redeemed"`。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 认领不存在 | 1004 | 404 |
+| 非帖主 | 1003 | 403 |
+| 认领不处于 `approved` | 1001 | 400 |
+| **凭证码不匹配** | 1011 | 400 |
+| 未登录 | 1002 | 401 |
+
+---
+
+## GET /api/posts/:id/matches
+
+基于规则的相似度匹配（SPEC 7.4），返回可能与这张帖互补的帖子。
+
+- 鉴权：**软鉴权**（游客也能看，只是 `author.contact` 一律为空）
+
+### 打分规则
+
+| 维度 | 分值 | 判定 |
+| --- | --- | --- |
+| 分类相同 | +40 | `category` 非空且相等 |
+| 地点相近 | +30 | 地点字符串的中文 2-gram 有交集 |
+| 时间接近 | +20 | `happened_at` 相差 ≤ 24 小时 |
+| 标题相似 | +10 | 标题的中文 2-gram 有交集 |
+
+- 总分 **≥ 60** 才进入结果集，**最多 5 条**
+- 排序：分数降序；同分按 `happened_at` 降序（稳定排序，分页可复现）
+- 候选集：`type` 取补集（`lost` 找 `found`，反之亦然）、`status = 'open'`、`id <> 本帖`，
+  走 `idx_type_status` 索引，并 `LIMIT 200` 兜底
+
+### 响应 data
+
+```json
+{
+  "list": [
+    {
+      "post": { /* PostDTO（列表形态，author.contact 为空串） */ },
+      "score": 100,
+      "reasons": ["分类相同 +40", "地点吻合 +30", "时间接近 +20", "标题相似 +10"]
+    }
+  ]
+}
+```
+
+`reasons` 的条数**等于**命中的维度数，前端直接渲染成标签。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 帖子不存在 | 1004 | 404 |
+| 路径 id 非正整数 | 1001 | 400 |
+
+---
+
+### 联系方式的第 4 条规则（P6）
+
+`GET /api/posts/:id` 的三级可见性规则在 P6 补齐了第 4 条：
+**「双方存在已通过的认领关系」→ 可见**。
+
+判定条件是 `claims` 表里存在 `post_id = 帖子` 且 `claimant_id = 当前用户`
+且 `status IN ('approved','redeemed')` 的记录。
+
+它被下推到 SQL 层，与 `contact_visible` 出自**同一条 SELECT 语句**：
+
+```sql
+CASE
+  WHEN ? = p.user_id                        THEN u.contact   -- 本人
+  WHEN u.contact_public = 1                 THEN u.contact   -- 作者公开
+  WHEN EXISTS (SELECT 1 FROM claims c
+               WHERE c.post_id = p.id
+                 AND c.claimant_id = ?
+                 AND c.status IN ('approved','redeemed'))
+                                            THEN u.contact   -- 已通过的认领
+  ELSE ''
+END
+```
+
+两个好处：
+
+1. 联系方式不可见时**根本不进入应用内存**，不是「查出来再删掉」
+2. 不可能出现 `contact_visible=true` 但 `contact=""` 的自相矛盾响应 ——
+   两者是同一个表达式的产物
+
+> 列表接口**不** SELECT 这一列（`author.contact` 恒为 `""`），
+> 因为列表页从不展示联系方式，多查一列只是白白把隐私数据搬进内存。
+

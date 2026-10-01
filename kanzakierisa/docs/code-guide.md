@@ -1,7 +1,8 @@
 # 代码说明文档
 
-> 随阶段推进增量维护。当前已覆盖 **P1 认证模块 / P3 列表搜索、分页与状态机**，
-> P2 的 CRUD 细节与 P6 的认领模块在 P7 阶段并档补全。
+> 随阶段推进增量维护。当前已覆盖 **P1 认证模块 / P3 列表搜索、分页与状态机 /
+> P5 发布编辑与图片上传 / P6 认领审核流与智能匹配**。
+> P2 的 CRUD 细节在 P7 阶段并档补全。
 
 本文档将覆盖：目录结构说明、分层职责（handler → service → store）、关键设计决策、可讲点。
 
@@ -490,6 +491,435 @@ group 根节点没有这个类；选中态也没有 `.van-radio--checked`（勾�
 - 后端防线 curl 逐条验证：越权 PUT → `1003`、未来时间 → `1001`、
   非法流转 → `1007`、`.txt` 与伪造 `.png` 与 3MB → `1009`
 - 截图 56 张存于 `docs/screenshots/p5/`（命名 `p5-NN-描述.png`）
+
+---
+
+## P6 · 认领审核流、电子凭证核销与智能匹配
+
+### 文件职责
+
+**后端**
+
+| 文件 | 职责 |
+| --- | --- |
+| `internal/pkg/voucher/voucher.go` | 6 位凭证码的生成 / 规范化 / 形态校验 |
+| `internal/model/claim.go` | `Claim` 实体、`ClaimDTO` / `MyClaimDTO`、三个请求体 |
+| `internal/store/querier.go` | `Querier` 接口：抽掉「事务 or 连接池」的差异 |
+| `internal/store/claim_store.go` | 认领的全部 SQL；1062 → 业务码的翻译 |
+| `internal/service/claim_service.go` | 认领校验顺序、审核、核销、凭证码重试 |
+| `internal/pkg/similar/similar.go` | 中文 2-gram 集合与交集判定 |
+| `internal/service/match_service.go` | SPEC 7.4 打分与排序 |
+| `internal/handler/claim_handler.go` / `match_handler.go` | 两组路由的 HTTP 编解码 |
+
+**前端**
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/api/claim.js` | 5 个认领接口 + 1 个匹配接口 |
+| `src/components/ClaimCard.vue` | 一张认领卡，同时服务帖主视角与申请人视角 |
+| `src/components/HonorCertificate.vue` | 拾金不昧证书（canvas 绘制 + 导出 PNG，07 §11 彩蛋） |
+| `src/components/MatchList.vue` | 详情页「可能有这些匹配」区块 |
+| `src/pages/ClaimManagePage.vue` | 帖主审核台（选择帖子 → 通过/拒绝/核销） |
+| `src/pages/MyClaimsPage.vue` | 申请人视角的认领记录 |
+
+### 依赖方向
+
+```
+handler ──→ service ──→ store ──→ database/sql
+   │           │
+   │           └──→ pkg/{voucher, similar, valid}   （纯函数，无状态）
+   │
+   └──→ pkg/{apperr, response, pagination}          （HTTP 编解码）
+```
+
+`service/claim_service.go` 是本阶段唯一一处 service 之间横向依赖：
+`ClaimService` 持有 `*PostService`，用来调 `changeStatusAsSystem`。
+这是刻意的 —— 认领流程要改帖子状态，必须复用**同一个**状态机入口，
+而不是自己再写一条 `UPDATE posts SET status = ?`。
+
+---
+
+### 关键设计决策（面试可讲点）
+
+#### 1. 「一张帖子最多一条已通过认领」为什么交给数据库
+
+应用层的「先查有没有 approved，没有就插入」在并发下必然失效：
+两个请求同时查到「没有」，然后双双插入。这不是理论问题 —— 认领正是
+「多个同学同时抢一个失物」的场景，天然高并发。
+
+MySQL 的解法是用**部分唯一索引的替代品**。「部分索引」MySQL 8 没有，
+但可以用生成列绕出来：
+
+```sql
+approved_flag TINYINT GENERATED ALWAYS AS (
+  IF(status IN ('approved','redeemed'), 1, NULL)
+) STORED,
+UNIQUE KEY uk_post_approved (post_id, approved_flag)
+```
+
+`status` 是 `approved`/`redeemed` 时 `approved_flag = 1`，否则是 `NULL`。
+而 **MySQL 的唯一索引允许任意多个 `NULL`**，于是：
+
+- 同一帖子可以同时存在任意多条 `pending` / `rejected`（全部 `NULL`，互不冲突）
+- 但 `approved`/`redeemed` 的 `(post_id, 1)` 只能有一条
+
+把「业务上最多一条」这件事变成数据库约束，比任何 `SELECT ... FOR UPDATE`
+的写法都更可靠 —— 它连「有人绕过应用层直接写库」这种情况都挡住了。
+**并且 `redeemed` 也计入 `1`**，所以核销后不会因为认领离开 `approved` 态
+而腾出一个空位让别人再通过一条。
+
+实测（seed 数据，post 29）：
+
+```
+ERROR 1062 (23000): Duplicate entry '29-1' for key 'claims.uk_post_approved'
+```
+
+#### 2. 1062 按**索引名**翻译，不按错误码猜
+
+`Create()` 里重名/冲突场景有**两个**不同的唯一索引，要映射成两个不同的业务码：
+
+| 索引 | 语义 | 业务码 |
+| --- | --- | --- |
+| `uk_post_claimant` | 我已经申请过这张帖 | 1008 |
+| `uk_post_approved` | 这张帖已有通过的认领 | 1010 |
+| `uk_voucher_code` | 凭证码撞车 | 内部哨兵，触发重试 |
+
+三者都是 errno **1062**，光看错误码分不出来，必须读消息里的索引名：
+
+```go
+var mysqlErr *mysql.MySQLError
+if errors.As(err, &mysqlErr) && mysqlErr.Number == 1062 {
+    switch {
+    case model.IsDuplicateEntryOn(err, model.IndexClaimsPostClaimant):
+        return 0, apperr.Wrap(apperr.CodeClaimExists, err)
+    case model.IsDuplicateEntryOn(err, model.IndexClaimsPostApproved):
+        return 0, apperr.Wrap(apperr.CodeClaimApproved, err)
+    }
+}
+```
+
+用 `errors.As` 而不是字符串匹配 —— 07 的「常见坑 2」明确点了这一条。
+索引名抽成 `model` 里的常量，并在注释里写明「必须与 `schema.sql` 保持同步」，
+因为这是一个**跨文件的隐式契约**，改了一处不改另一处会静默退化成 5000。
+
+#### 3. 事务：`defer tx.Rollback()` 不需要「提交成功就跳过」
+
+```go
+tx, err := s.claims.BeginTx(ctx)
+if err != nil { return nil, apperr.Wrap(apperr.CodeInternal, err) }
+defer func() {
+    if rbErr := tx.Rollback(); rbErr != nil && rbErr.Error() != "sql: transaction has already been committed or rolled back" {
+        slog.Error("回滚认领审核事务失败", "claimId", claimID, "error", rbErr)
+    }
+}()
+```
+
+07 的「常见坑 1」给了两种写法（`if err != nil { Rollback }` 或直接 `defer Rollback`）。
+这里选了后者并且**不写任何成功分支**：`database/sql` 对已提交的事务再 `Rollback`
+会返回 `ErrTxDone`，是安全的 no-op，不会撤销已经提交的写入。
+写 `if committed { skip }` 反而是画蛇添足 —— 任何一条新的 `return` 分支
+都可能忘记维护那个标志位。
+
+#### 4. `SELECT ... FOR UPDATE` 必须在事务里，而且要在**读之前**
+
+```go
+tx, _ := s.claims.BeginTx(ctx)
+claim, err := s.claims.GetByIDForUpdate(ctx, tx, claimID)  // 锁到事务结束
+```
+
+锁必须在**第一次读之前**拿到。若先不带锁读一遍判断 `status == pending`，
+再带锁读第二遍，两次读之间的窗口就够另一个请求抢先处理掉这条认领。
+
+拿到行锁之后的 `UPDATE ... WHERE id = ? AND status = 'pending'` 里那个
+`status = 'pending'` 是**第二道防线**：万一有人把 `FOR UPDATE` 去掉了，
+`RowsAffected == 0` 会让流程报错而不是静默成功。
+
+#### 5. 自动流转复用 `ValidateTransition`，并且传入事务
+
+认领通过要 `open → matched`，核销要 `matched → closed`。
+这两次流转**没有**自己写 SQL，而是复用了 P3 的 `changeStatusAsSystem`：
+
+```go
+func (s *PostService) changeStatusAsSystem(ctx context.Context, tx *sqlx.Tx, postID int64, to string) error
+```
+
+`tx` 参数是本阶段对 07 §3 的一处**有意加码**。07 给的签名没有事务参数，
+但那样会出一个真实的一致性洞：认领更新在一个事务里，帖子状态在另一个连接上提交。
+如果帖子状态更新失败，认领已经 `approved`、帖子还停在 `open`，
+用户会看到「已通过但还在寻找中」。
+
+加上 `tx` 之后两步在同一个事务里，`open → matched` 失败会连带回滚认领写入。
+
+为了不把「事务版」和「连接池版」写两份 SQL，引入了一个 3 方法的接口：
+
+```go
+type Querier interface {
+    GetContext(ctx context.Context, dest any, query string, args ...any) error
+    SelectContext(ctx context.Context, dest any, query string, args ...any) error
+    ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+```
+
+`*sqlx.DB` 和 `*sqlx.Tx` 都天然满足它，于是 `PostStore` 的每个方法只需要
+写一遍 SQL，用 `s.posts.Handle(tx)` 一句就能在两种模式下切换
+（`tx == nil` 时返回连接池）。**两次实现 = 迟早分叉**，这是这个接口存在的唯一理由。
+
+白名单只定义一次的收益也在这一步兑现：将来如果要允许 `open → closed` 之外的新边，
+改 `valid.go` 一个地方，P3 的作者改状态与 P6 的系统流转会同时生效。
+
+#### 6. 凭证码：字符集、随机源、重试
+
+```go
+const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  // 剔除 0 O 1 I L
+const Length = 6
+const codeSpace = len(alphabet)                     // 32 = 2^5
+```
+
+三点讲究：
+
+1. **剔除形近字符**是关键（07 常见坑 5）。这串码要被人念给对方听、或手抄在纸上，
+   `0/O`、`1/I/L` 混淆会直接导致核销失败，而失败原因还很难排查。
+2. **字母表长度取 32**（2 的幂）是为了能用**取位掩码**代替取模：
+
+   ```go
+   b := make([]byte, 1)
+   for {
+       if _, err := rand.Read(b); err != nil { return "", err }
+       if b[0]&(codeSpace-1) < codeSpace { break }   // 天然等概率，无需丢样本
+   }
+   code[i] = alphabet[b[0]&(codeSpace-1)]
+   ```
+
+   取模 `b[0] % 32` 在这里其实也均匀（256 是 32 的整数倍），但把
+   「字母表长度必须是 2 的幂」这件事**写进代码**，以后有人往字母表里加字符
+   会在 review 时立刻被这个掩码提醒到，而不是悄悄引入偏置。
+3. **碰撞靠唯一索引兜底 + 有界重试**。32^6 ≈ 10.7 亿的码空间，
+   实际碰撞概率极低，但「极低」不等于「不会」。`uk_voucher_code` 是硬约束，
+   service 侧捕获到专用哨兵错误后重试，**至多 5 次**：
+
+   ```go
+   var ErrVoucherCodeConflict = errors.New("凭证码已被占用")   // 类型化哨兵，不是业务错误码
+   ```
+
+   用哨兵错误而不是 `apperr`：这不是要返回给用户的业务错误，而是
+   service 内部的重试信号。如果把它做成 `apperr.CodeXxx`，它就会
+   穿过 service 边界变成一个 HTTP 状态码 —— 语义被污染了。
+
+#### 7. `subtle.ConstantTimeCompare` 的长度前提
+
+```go
+func matchVoucher(stored *string, input string) bool {
+    if stored == nil { return false }
+    want := *stored
+    if len(want) != len(input) { return false }   // 长度不同直接失败
+    return subtle.ConstantTimeCompare([]byte(want), []byte(input)) == 1
+}
+```
+
+`subtle.ConstantTimeCompare` 在两个切片长度不同时返回 `0`，但它**不保证**
+这种情况下的时间恒定。所以先比长度（长度不是秘密，凭证码固定 6 位），
+再对等长切片做恒定时间比较。07 常见坑 6 说的就是这个。
+
+#### 8. 联系方式可见性第 4 条：仍然是 SQL 层
+
+P3 已经把前 3 条规则写进了 SELECT 的 `CASE`。P6 新增的第 4 条
+（双方存在已通过/已核销的认领关系）延续同一个原则 —— 加一个 `EXISTS` 子查询：
+
+```sql
+CASE
+  WHEN ? = p.user_id            THEN u.contact
+  WHEN u.contact_public = 1     THEN u.contact
+  WHEN EXISTS (SELECT 1 FROM claims c
+               WHERE c.post_id = p.id AND c.claimant_id = ?
+                 AND c.status IN ('approved','redeemed'))
+                                THEN u.contact
+  ELSE ''
+END
+```
+
+为什么不放在 service 里做？因为 `contact_visible` 和 `contact` 必须来自
+**同一个表达式**。如果可见性在 SQL 里算、联系方式在 Go 里清空，
+一旦有人只改了一边，就会出现 `contact_visible=true` 但 `contact=""`
+的自相矛盾响应 —— 前端会渲染出一个空白的联系方式区块。
+
+同一条 SQL 产出两个字段，矛盾在结构上就不可能发生。这是「
+让类型/结构替你保证不变量」而不是「靠人的自觉」。
+
+#### 9. `Querier` 之外的第二个复用：`claimFromClause`
+
+`claim_store.go` 里把 SELECT 列、FROM/JOIN 子句抽成三个常量：
+
+```go
+claimCoreColumns  // 实体字段
+claimDetailColumns // 实体 + 申请人昵称 + 帖子摘要
+claimFromClause   // LEFT JOIN users / posts
+```
+
+`GetByID` / `GetByIDForUpdate` / `getDetail` / `ListByPost` / `ListByClaimant`
+五处共用同一份子句。如果各自拼一遍，改一个 JOIN 条件（比如把
+`LEFT JOIN` 改成 `INNER JOIN`）就会漏掉某几条查询 —— 那种 bug 表现为
+「这个接口查得到、那个接口查不到」，非常难定位。
+
+#### 10. 认领状态机：**不**复用帖子的 `ValidateTransition`
+
+帖子是 `open → matched → closed` 的**有向链**，认领是
+`pending → {approved → redeemed | rejected}` 的分叉 —— 两者形状不同，
+硬塞进同一个白名单只会把表写成一团解释不清的数据。
+
+真正的复用点在别处：**认领状态机定义在 `valid` 包里，和帖子状态机并排**，
+前端从 `/constants` 的 `CLAIM_STATUS` 取同一份枚举。三处（后端 `valid`、
+数据库 `ENUM`、前端常量）保持一致的方式是「放在一起、注释互指」，
+而不是抽一层谁都不认识的抽象。
+
+#### 11. `can_claim` 与 `my_claim` 为什么必须拆成两个字段
+
+`can_claim` 的职责被限制成一个**静态准入判断**：`type=found`、非本人、
+`status≠closed`、已登录。它在列表接口和详情接口上语义完全一致。
+
+「我已经申请过了吗、到哪一步了」这件事**只有详情页拿得到**（要查 `claims` 表），
+放进 `my_claim`。
+
+于是前端的判断顺序必须是：
+
+```
+自己是帖主  >  my_claim 存在  >  can_claim  >  登录 / 兜底
+```
+
+**`my_claim` 排在 `can_claim` 前面**是这一处设计的全部要点。
+后端刻意没有把「已申请」塞进 `can_claim`，因为那样会让
+「可以直接认领」和「已经申请过了」在同一个布尔里互相污染；
+代价是前端必须记住这个顺序 —— 写反了，一个已提交申请的人会看到
+「这是我的」而以为自己没提交成功。
+
+### 前端的关键取舍
+
+#### 12. 一张 `ClaimCard` 服务两个页面
+
+`ClaimManagePage`（帖主）和 `MyClaimsPage`（申请人）展示的是**同一条 claim 的两面**，
+字段几乎完全重合，差别只在「头部显示谁」和「底部有没有操作按钮」。
+
+拆成两个组件的代价是 `voucher_code` 的可见性判断、拒绝理由的排版、
+凭证码的等宽样式要各写一遍。一张卡 + `mode="manage" | "mine"` 更好维护。
+
+操作请求也由卡片自己发起（与 P5 的 `StatusActionSheet` 同一约定），
+成功后只 `emit('success')` 让父页面重拉 —— **不本地改 status**，
+以后端落库结果为准。
+
+#### 13. `voucher_code` 的 `null` vs `""`
+
+后端明确约定未通过时是 `null`。前端因此**只用真值判断**：
+
+```js
+const voucher = computed(() => props.claim.voucher_code || '')
+```
+
+不写 `!== ''` —— 那会把 `null` 判成「有值」，渲染出一个空的凭证码卡片
+（07 常见坑 8）。
+
+#### 14. `van-dialog` 的 `before-close` 用来「接口失败就不关弹层」
+
+```js
+async function onRedeemBeforeClose(action) {
+  if (action !== 'confirm') return true     // 取消：放行关闭
+  ... 
+  try { await claimApi.redeem(...); return true }  // 成功：关闭
+  catch { return false }                           // 失败：留在弹层里
+}
+```
+
+拒绝理由与核销码两个弹层都用这个模式。收益是：1011（凭证码错误）时
+用户改一个字符就能重试，而不是「点确认 → 弹层被清空 → 重新点按钮 → 重新输入」。
+`showToast` 不会关弹层，两者配合刚好。
+
+#### 15. `van-list` 的「自动触发」与「手动重载」必须二选一
+
+`van-list` 挂载后会自动触发一次 `@load`。这带来一个易错点：
+**换帖子时如果手动调一次 `fetchClaims()`，会和自动触发撞成两个并发请求**，
+而第二个请求的 `page` 已经被推到 2，列表里会莫名少掉第一页。
+
+解法是 `:key="postId"` + 只重置状态、不发请求：
+
+```js
+// pick() 里
+resetClaimsState()          // page=1, list=[], finished=false
+postId.value = post.id      // key 变化 → van-list 重新挂载 → 自己触发 @load
+```
+
+而「同一条帖子重载」（审核/核销后）走另一条路径 `reloadClaims()`：
+van-list 不会重新挂载，所以必须手动 `fetchClaims()`。
+
+两条路径分开，各自只负责一种情况 —— 这是本阶段唯一一处前端状态机。
+
+#### 16. `MatchList` 无匹配时整块不渲染
+
+07 §4 要求「无匹配时整个区块不渲染（不要显示空区块）」。
+实现上不是渲染一个空盒子再 `v-if` 内容，而是：
+
+```html
+<section v-if="list.length" class="match-list">
+```
+
+**加载中也不渲染**，否则会出现「先闪一个空块、再被填满」的抖动。
+匹配是锦上添花的信息，接口失败也**静默**（不弹 Toast），
+不该干扰「查看 / 认领」这条主流程。
+
+#### 17. 走查脚本上的两个坑（写进文档免得下次再踩）
+
+自动化走查用 Puppeteer + 系统 Edge（不额外下载 Chromium）。
+两个坑都很有代表性：
+
+1. **`click({ clickCount: 3 })` 在 `isMobile: true` 下选不中文本** ——
+   本意是「三击全选、退格清空」，实际只删掉一个字符，再撞上 `maxlength=6`
+   就被静默截断：想输 `A79GTC` 实际输进去的是 `AAAAAA`，
+   表现成「核销一直失败」。改成 `el.value = ''` + 派发 `input` 事件。
+2. **Toast 会盖住弹层中下部的按钮** —— 1011 的 Toast 持续 2 秒，
+   紧接着点「确认核销」会点在 Toast 上，形成「点了没反应」的假失败。
+   截图与下一次点击前都要等 Toast 自己消失。
+
+第二个坑在**人工点一遍时也会遇到**，只是人会自动多等一会儿、or 挪一下位置。
+把它记录下来，比在 CI 里加一个 `sleep` 更有价值。
+
+#### 18. 拾金不昧证书：先纠正主语，再画图（07 §11 彩蛋）
+
+07 §11 建议把这个证书放在「我的认领」页，括注是「申请人视角转成『归还者视角』」。
+但在这个系统里主语是反的：
+
+| 角色 | 在本系统里做了什么 |
+| --- | --- |
+| `found` 帖的作者 | **捡到东西、交还给失主** —— 拾金不昧的主体 |
+| 提交认领的人 | **丢了东西、把东西领回去** —— 失主 |
+
+认领只发生在 `found` 帖上，所以「申请人」永远是失主。
+把「拾金不昧」证书发给失主，等于给丢东西的人发拾金不昧奖 —— 语义是拧的。
+
+因此证书改为**颁发给帖主（拾主）**，入口挂在「认领管理」页的已交接卡片上。
+这个位置还有个附带好处：`redeemed_at`（归还日期）与帖子标题本来就都在这一页的数据里，
+不需要为证书新增任何接口。
+
+实现上的两个选择：
+
+- **用 `<canvas>` 而不是 DOM**。证书的终点是「一张可以保存、可以转发的图片」，
+  `canvas.toDataURL('image/png')` 一行就能产出。用 DOM 画得好看，最后还是得引一个
+  截图库才能导出，多一个依赖换更少的可控性。
+- **画布写死 720×520 逻辑尺寸 + 2 倍超采样**（导出 1440×1040），
+  与屏幕 DPR 解耦，任何设备导出的都是同一张图。
+- 正文那一行由「固定文案 + 变长昵称 + 固定文案」三段拼成，
+  三段各自 `measureText` 后累加算起点。**不要给昵称写死偏移量** ——
+  那在昵称长短变化时立刻露馅（要么重叠、要么中间裂一道缝）。
+
+### 本阶段的验收证据
+
+- `go build ./...` / `go vet ./...` 零错误零警告
+- `npm run build` 成功（vite v8.3.1）
+- 16 条认领流 curl 验收全部通过（含 8 并发重复提交的兜底实测）
+- 三个唯一索引逐个实测触发：`uk_post_claimant` → 1008、
+  `uk_post_approved` → 1010、`uk_voucher_code` → 重试/哨兵
+- 匹配打分实测：相关帖 100 分 4 条理由、无关帖 0 分不入列表
+- 浏览器走查 33 张截图存于 `docs/screenshots/p6/`；脚本内置 **11 条硬断言**全部 PASS
+  （匹配分数与理由条数、提交后按钮文案、拒绝理由回显、凭证码长度与字符集、
+  通过后帖子 `matched`、核销后帖子 `closed` 与认领 `redeemed`、证书 canvas 可导出 PNG）
+- 证书彩蛋：canvas 由 2 倍超采样绘制，`toDataURL('image/png')` 实测导出成功
+  （这条断言正是发现「弹层懒渲染导致画布空白」的原因，见上文第 18 点）
 
 ---
 

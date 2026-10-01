@@ -22,6 +22,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast, showToast } from 'vant'
 
+import * as claimApi from '@/api/claim'
 import * as postApi from '@/api/post'
 import * as userApi from '@/api/user'
 import PostCard from '@/components/PostCard.vue'
@@ -39,9 +40,8 @@ const nickname = computed(
 // ==================== 数据统计 ====================
 const stats = reactive({
   posts: 0,
-  /** 认领数依赖 GET /api/users/me/claims，属 P6 的接口。
-   *  这里保持 null 并渲染成「—」，接口就位后把 fetchStats 里那一行接上即可，
-   *  页面结构不用再改。 */
+  /** 认领数：P6 接口就位后接上（P5 时这里恒为「—」）。
+   *  与发帖数一样只要 total，pageSize 取 1，不搬运行数据。 */
   claims: null,
 })
 
@@ -52,6 +52,13 @@ async function fetchStats() {
     stats.posts = data.total || 0
   } catch {
     // 统计是装饰性信息，拉失败不该影响主列表；不弹提示
+  }
+
+  try {
+    const data = await claimApi.listMine({ page: 1, pageSize: 1 })
+    stats.claims = data.total || 0
+  } catch {
+    // 同上：拿不到就保持 null，模板会渲染成「—」
   }
 }
 
@@ -209,6 +216,11 @@ function goMyClaims() {
   router.push('/me/claims')
 }
 
+/** 认领管理：不带 postId 进入，由页面顶部自行选择帖子（P6） */
+function goClaimManage() {
+  router.push('/claims/manage')
+}
+
 function onLogout() {
   showConfirmDialog({
     title: '退出登录',
@@ -295,6 +307,7 @@ function onLogout() {
     <!-- 功能入口 -->
     <van-cell-group inset class="me-page__entries">
       <van-cell title="我的认领" is-link @click="goMyClaims" />
+      <van-cell title="认领管理" is-link @click="goClaimManage" />
       <van-cell title="编辑资料" is-link @click="openProfile" />
     </van-cell-group>
 
