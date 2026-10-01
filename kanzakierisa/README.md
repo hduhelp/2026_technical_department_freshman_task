@@ -26,6 +26,18 @@ docker compose exec -T mysql mysql -uroot -plostfound123 < sql/schema.sql
 mysql -uroot -p < sql/schema.sql
 ```
 
+### 1.5 演示数据
+
+```bash
+cd server
+# 3 个账号（alice / bob / carol，密码统一 123456）+ 16 条帖子 + 2 条认领记录
+# Windows 下必须显式指定字符集，否则中文昵称会按 GBK 解码报错
+mysql --default-character-set=utf8mb4 -uroot -p < sql/seed.sql
+
+# 或直接：
+make seed
+```
+
 ### 2. 后端
 
 ```bash

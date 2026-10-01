@@ -79,6 +79,9 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 		// 公开接口：无需登录
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
+		// 列表对游客开放：浏览 / 搜索是路人也能用的能力（SPEC 用户故事 3）。
+		// 联系方式不在列表里返回，因此公开它不会带来泄露面。
+		api.GET("/posts", postHandler.List)
 
 		// 软鉴权接口：登录与否都能访问，登录用户能拿到额外视角字段
 		// （本人可见的联系方式、can_edit / can_claim）。
@@ -93,10 +96,14 @@ func New(cfg *config.Config, pool *sqlx.DB) *gin.Engine {
 			authed.POST("/auth/logout", authHandler.Logout)
 			authed.GET("/users/me", userHandler.Me)
 			authed.PATCH("/users/me", userHandler.UpdateMe)
+			// 「我的帖子」：user_id 固定取当前登录用户，不接受查询参数。
+			authed.GET("/users/me/posts", postHandler.ListMine)
 
 			authed.POST("/posts", postHandler.Create)
 			authed.PUT("/posts/:id", postHandler.Update)
 			authed.DELETE("/posts/:id", postHandler.Delete)
+			// 状态流转走 SPEC 7.1 白名单，仅作者可操作。
+			authed.PATCH("/posts/:id/status", postHandler.ChangeStatus)
 
 			authed.POST("/upload", uploadHandler.Upload)
 		}

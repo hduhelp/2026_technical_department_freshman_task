@@ -9,6 +9,7 @@ import (
 	"hdu-lostfound/internal/middleware"
 	"hdu-lostfound/internal/model"
 	"hdu-lostfound/internal/pkg/apperr"
+	"hdu-lostfound/internal/pkg/pagination"
 	"hdu-lostfound/internal/pkg/response"
 	"hdu-lostfound/internal/service"
 )
@@ -121,6 +122,93 @@ func (h *PostHandler) Delete(c *gin.Context) {
 		return
 	}
 	response.OKEmpty(c)
+}
+
+// List 处理 GET /api/posts。
+//
+// 鉴权：否（游客可访问）。游客只是拿不到 can_edit / can_claim
+// 与联系方式，列表本身是公开内容。
+//
+// 查询参数：type / status / category / keyword / page / pageSize。
+// 分页与枚举的「越界怎么办」都不在本层判断，交给 pagination 与 service，
+// handler 只负责把字符串取出来 —— 保持「HTTP 编解码」这一层薄到底。
+func (h *PostHandler) List(c *gin.Context) {
+	p := pagination.Parse(c.Query("page"), c.Query("pageSize"))
+
+	f := service.ListFilter{
+		Type:     c.Query("type"),
+		Status:   c.Query("status"),
+		Category: c.Query("category"),
+		Keyword:  c.Query("keyword"),
+	}
+
+	// inList = true：列表接口一律不外带联系方式。
+	view := viewOf(c, true)
+
+	list, total, err := h.posts.List(c.Request.Context(), f, view, p.PageSize, p.Offset)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, p.Result(list, total))
+}
+
+// ListMine 处理 GET /api/users/me/posts。
+//
+// 鉴权：强制。只额外支持 status 筛选（「我的」页面的状态 Tab），
+// 其余参数与 GET /api/posts 一致。
+//
+// 注意 user_id **不来自查询参数**，固定取当前登录用户 ——
+// 否则改一个 ?user_id= 就能翻别人的帖子。
+func (h *PostHandler) ListMine(c *gin.Context) {
+	u := middleware.CurrentUser(c)
+	if u == nil {
+		response.Fail(c, apperr.New(apperr.CodeUnauthorized))
+		return
+	}
+
+	p := pagination.Parse(c.Query("page"), c.Query("pageSize"))
+
+	view := viewOf(c, true)
+
+	list, total, err := h.posts.ListMine(c.Request.Context(), u.ID, c.Query("status"), view, p.PageSize, p.Offset)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, p.Result(list, total))
+}
+
+// ChangeStatus 处理 PATCH /api/posts/:id/status。
+//
+// 鉴权：强制，且仅作者（非作者由 service 返回 1003）。
+// 状态流转的合法性（白名单 1007）全部由 service 判断，handler 不复制那份规则 ——
+// 状态机只能有一处定义，否则手动流转与认领联动迟早会分叉。
+func (h *PostHandler) ChangeStatus(c *gin.Context) {
+	u := middleware.CurrentUser(c)
+	if u == nil {
+		response.Fail(c, apperr.New(apperr.CodeUnauthorized))
+		return
+	}
+
+	postID, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+
+	var req model.PatchStatusReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// 缺 status 字段（binding:"required"）或 JSON 结构错，统一归 1001。
+		response.Fail(c, apperr.Newf(apperr.CodeInvalidParam, "请求参数不合法"))
+		return
+	}
+
+	dto, err := h.posts.ChangeStatus(c.Request.Context(), postID, u.ID, req.Status)
+	if err != nil {
+		response.Fail(c, err)
+		return
+	}
+	response.OK(c, dto)
 }
 
 // parseIDParam 解析路径参数中的正整数 id。

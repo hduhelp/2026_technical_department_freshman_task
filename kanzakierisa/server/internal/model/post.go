@@ -193,10 +193,15 @@ func contactVisible(viewerID int64, authorID int64, authorContactPublic bool, ha
 
 // ToPostDTO 把实体按给定视角组装成对外 DTO。
 //
-// 联系方式在这里**被决定是否对外暴露**：P2 阶段总是从数据库把
-// author_contact 查出来，再按规则决定填 "" 还是真实值（SPEC 03 要点 3）。
-// P3 会把这个判断下推到 SQL 层（不可见时干脆不 SELECT），
-// 但对外行为不变 —— 这是纯粹的优化，不是语义变更。
+// 联系方式是否对外暴露**已在 SQL 层决定**（SPEC 7.2 + post_store.go 的
+// contactCaseSQL）：不可见的行，数据库直接返回空串，真实联系方式根本没
+// 进入过应用内存。P2 阶段那种「全查出来再在内存里删」的写法已按 SPEC
+// 要求下推掉，这是 P3 的一处刻意重构。
+//
+// 本函数里对 contact 的再次收窄不是重复劳动，而是**纵深防御**：
+// 列表接口（view.InList）即便 store 传回了值也一律输出空串，
+// 这样「列表不泄露联系方式」这条规则不会因为将来谁改了 store 的
+// SELECT 清单而失守。
 func ToPostDTO(p *Post, view PostView) *PostDTO {
 	if p == nil {
 		return nil

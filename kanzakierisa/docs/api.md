@@ -1,7 +1,7 @@
 # API 文档
 
 > 校园失物招领系统后端接口文档。
-> 本文件随阶段推进增量维护：**P0 脚手架 / P1 认证与用户 / P2 帖子 CRUD 与图片上传已完成**，其余模块在后续阶段补全。
+> 本文件随阶段推进增量维护：**P0 脚手架 / P1 认证与用户 / P2 帖子 CRUD 与图片上传 / P3 列表搜索、分页与状态机已完成**，认领与匹配模块在后续阶段补全。
 
 ## 约定速览
 
@@ -11,6 +11,7 @@
 - 列表类接口的 `data` 形如 `{ "list": [], "page": 1, "pageSize": 10, "total": 137 }`
 - 所有时间字段均为 **RFC3339 UTC**（如 `2026-09-30T23:24:48Z`），由前端转换为本地时区展示
 - 分页：`page` 默认 1；`pageSize` 默认 10，范围 1–50，**越界夹取不报错**
+- 列表筛选：枚举参数（`type` / `status` / `category`）取到**非法值**时**静默忽略该条件**（等同不筛选），同样不报错 —— 与分页参数保持同一条「容错优先」策略
 
 ### 鉴权类型说明
 
@@ -27,7 +28,7 @@
 | code | HTTP | 含义 | 触发场景 |
 | --- | --- | --- | --- |
 | 0 | 200 | 成功 | — |
-| 1001 | 400 | 参数错误 | 校验失败、分页越界、枚举非法 |
+| 1001 | 400 | 参数错误 | 请求体校验失败、路径参数非法、请求体中的枚举非法（**列表筛选参数不适用**，见「列表接口通用约定」） |
 | 1002 | 401 | 未登录或凭证失效 | 缺 token / 验签失败 / 过期 / 用户已不存在 |
 | 1003 | 403 | 无权限 | 改别人的帖子、非帖主审核 |
 | 1004 | 404 | 资源不存在 | 帖子 / 认领 / 用户不存在 |
@@ -73,12 +74,12 @@
 | 用户 | GET `/api/users/me` | 是 | 当前用户信息 | P1 ✅ |
 | 用户 | PATCH `/api/users/me` | 是 | `{nickname?, contact?, contact_public?}` | P1 ✅ |
 | 帖子 | POST `/api/posts` | 是 | 创建帖子 | P2 ✅ |
-| 帖子 | GET `/api/posts` | 否 | `type` `status` `category` `keyword` `page` `pageSize` | P3 |
+| 帖子 | GET `/api/posts` | 否 | `type` `status` `category` `keyword` `page` `pageSize` | P3 ✅ |
 | 帖子 | GET `/api/posts/:id` | 软鉴权 | 详情，按三级规则处理联系方式 | P2 ✅ |
 | 帖子 | PUT `/api/posts/:id` | 是 | 仅作者；**不允许改 `type` 与 `status`** | P2 ✅ |
 | 帖子 | DELETE `/api/posts/:id` | 是 | 仅作者；级联删除其认领 | P2 ✅ |
-| 帖子 | PATCH `/api/posts/:id/status` | 是 | `{status}`，仅作者，走状态机白名单 | P3 |
-| 帖子 | GET `/api/users/me/posts` | 是 | `status?` `page` `pageSize` | P3 |
+| 帖子 | PATCH `/api/posts/:id/status` | 是 | `{status}`，仅作者，走状态机白名单 | P3 ✅ |
+| 帖子 | GET `/api/users/me/posts` | 是 | `status?` `page` `pageSize` | P3 ✅ |
 | 上传 | POST `/api/upload` | 是 | `multipart/form-data`，字段名 `file` → `{url}` | P2 ✅ |
 | 认领 | POST `/api/posts/:id/claims` | 是 | `{proof}` | P6 |
 | 认领 | GET `/api/posts/:id/claims` | 是 | 仅帖主，返回该帖全部申请 | P6 |
@@ -350,6 +351,7 @@ curl -X PATCH http://localhost:8080/api/users/me \
 - `can_edit`：请求者是否为作者
 - `can_claim`：是否满足认领的静态前置条件（`type=found`、非本人、`status≠closed`、已登录）；游客恒 `false`
 - `images` 为空时是 `[]`，**不是 `null`**（数据库列也存 `[]` 而非 NULL）
+- **列表接口中的差异**（P3）：`author.contact` 一律为 `""`，`contact_visible` 仍按规则计算
 
 ---
 
@@ -422,9 +424,13 @@ curl -X POST http://localhost:8080/api/posts \
 if viewer == 游客                    → false
 if viewer.ID == author.ID            → true   // 本人可见
 if author.contact_public             → true   // 作者主动公开
-if 双方存在已通过的认领关系           → true   // P6 接入，P2 恒 false
+if 双方存在已通过的认领关系           → true   // P6 接入，P3 恒 false
 otherwise                            → false
 ```
+
+> **实现在 SQL 层（P3）**：可见性判断被写进 SELECT 列表（`CASE WHEN ... THEN u.contact ELSE '' END`），
+> 不可见的行由数据库直接返回空串，**真实联系方式根本不会进入应用内存** ——
+> 而不是「先查出来再在内存里删掉」。列表接口更进一步，干脆不 SELECT 这一列。
 
 响应中**同时**返回 `author.contact`（不可见时 `""`）与 `author.contact_visible`（bool），
 前端据此渲染不同 CTA。
@@ -519,6 +525,205 @@ curl -X PUT http://localhost:8080/api/posts/12 \
 
 ---
 
+## 列表接口通用约定（P3）
+
+`GET /api/posts` 与 `GET /api/users/me/posts` 共用以下约定。
+
+### 分页参数
+
+| 参数 | 默认 | 规则 |
+| --- | --- | --- |
+| `page` | 1 | 非数字或 < 1 → **归一化为 1** |
+| `pageSize` | 10 | 非数字 → **10**；< 1 → **1**；> 50 → **夹取为 50** |
+
+越界一律夹取，**任何情况都不返回 1001**。页码超过总页数时返回**空 `list` 且 `code = 0`**，不返回 404。
+
+> **为什么夹取而不是报错？** 分页参数由前端按用户操作拼装，一个 `pageSize=999`
+> 不该让整个列表页变成 400 被挡在门外；而 50 的上限是防「一次拉全表」的必要保护。
+
+### 列表筛选参数策略（本阶段明确选定的策略）
+
+| 参数 | 说明 |
+| --- | --- |
+| `type` | ∈ {`lost`, `found`} |
+| `status` | ∈ {`open`, `matched`, `closed`} |
+| `category` | ∈ {`card`,`digital`,`book`,`key`,`clothes`,`other`} |
+| `keyword` | 同时匹配 `title` 与 `description`，前空白会被 `TrimSpace`，为空视为未传 |
+
+**枚举参数取到非法值时，服务端静默忽略该条件（等同不筛选），返回 `code = 0`，不返回 1001。**
+
+> 这是阶段文件 04 §4 给出的「二选一」中，本项目**明确选定**的一种，特此写明以免误解：
+> - 选它的理由：筛选条件与分页参数同源（都由前端按点击拼 URL）。既然 `pageSize`
+>   越界走的是「夹取不报错」，枚举非法也应当走同一条「容错优先」的路子，
+>   否则同一类输入会出现两套处理方式。
+> - 已知代价：`?type=lostt` 这类笔误会**静默返回全部结果**，看起来像筛选没生效。
+>   前端应把用户的选择限制在下拉/标签控件里，从源头避免传错值。
+> - 对照：`PATCH /api/posts/:id/status` 的 `status` 属于**请求体**而非筛选条件，
+>   它取非法值仍然返回 `1001`（见该接口的错误表）。
+
+### 排序
+
+`ORDER BY created_at DESC, id DESC`。
+
+> 追加 `id DESC` 是为了**稳定排序**：`created_at` 精度到秒，同一秒创建的两条帖子
+> 若只按时间排序，MySQL 不保证两次查询的相对顺序一致，分页时会出现
+> 「第 1 页与第 2 页同时出现某条，另一条永远看不到」。
+
+### 列表里的 author 字段
+
+- `author.contact` **一律为空串 `""`**，即使按可见性规则判定可见也不返回（减少一次批量查询里的泄露面）
+- `author.contact_visible` 仍按三级规则计算，前端据此在卡片上渲染「登录后可见」之类的提示
+
+---
+
+## GET /api/posts
+
+帖子列表（浏览 / 搜索 / 筛选）。这是任务原文点名要练习 `WHERE / LIKE / ORDER BY / LIMIT / OFFSET` 的接口。
+
+- 鉴权：**否**（游客可访问；游客的 `can_edit` / `can_claim` 恒为 `false`）
+
+### 查询参数
+
+`type`、`status`、`category`、`keyword`、`page`、`pageSize`，规则见上方「列表接口通用约定」。
+
+### 响应 data
+
+```json
+{
+  "list": [ /* Post */ ],
+  "page": 1,
+  "pageSize": 10,
+  "total": 16
+}
+```
+
+`total` 与 `list` **使用完全相同的 WHERE 条件**（同一个条件构造器），因此两者永远一致。
+
+```bash
+# 默认列表（page=1, pageSize=10）
+curl "http://localhost:8080/api/posts"
+
+# 关键字搜索（命中 title 或 description）
+curl --get "http://localhost:8080/api/posts" --data-urlencode "keyword=校园卡"
+
+# 分页
+curl "http://localhost:8080/api/posts?page=2&pageSize=5"
+
+# 组合筛选
+curl "http://localhost:8080/api/posts?type=found&status=open&category=digital"
+
+# 越界夹取（pageSize 会被夹到 50）
+curl "http://localhost:8080/api/posts?pageSize=9999"
+```
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 数据库异常 | 5000 | 500 |
+
+> 查询参数本身**不产生任何 4xx**：分页越界夹取、枚举非法忽略。
+> 路径参数非法（`GET /api/posts/abc`）才是 1001。
+
+---
+
+## GET /api/users/me/posts
+
+「我的帖子」列表，用于「我的」页面的状态 Tab。
+
+- 鉴权：**是**
+
+### 查询参数
+
+`status`、`page`、`pageSize`。**不支持** `type` / `category` / `keyword`。
+
+`user_id` **固定取当前登录用户**，请求里带 `?user_id=` 会被忽略 ——
+否则改一个参数就能翻别人的帖子。
+
+### 响应 data
+
+同 `GET /api/posts`。
+
+```bash
+curl "http://localhost:8080/api/users/me/posts?status=open" -H "Authorization: Bearer $TOKEN"
+```
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| 未登录 | 1002 | 401 |
+
+---
+
+## PATCH /api/posts/:id/status
+
+帖子状态流转。
+
+- 鉴权：**是**，且**仅作者**
+
+### 请求体
+
+| 字段 | 类型 | 必填 | 取值 |
+| --- | --- | --- | --- |
+| `status` | string | 是 | `open` \| `matched` \| `closed` |
+
+```json
+{ "status": "matched" }
+```
+
+### 状态机
+
+```
+                 作者点「已找到」            作者点「已结束」
+open(寻找中) ──────────────────▶ matched(已找到) ──────────────▶ closed(已结束)
+     │                                                                ▲
+     └──────────────────── 作者直接「结束」───────────────────────────┘
+```
+
+- 合法跳转白名单：`open→matched`、`matched→closed`、`open→closed`
+- `closed` 是**终态**，不可逆
+- 与认领流程的联动（P6 接入）：认领 `approve` → 帖子自动置 `matched`；认领核销 → 帖子自动置 `closed`。
+  自动流转**复用同一个校验函数**，不另写一份规则
+
+### 响应 data
+
+更新后的完整 `Post`（`status` 与 `updated_at` 已刷新）。
+
+### 错误
+
+| 场景 | code | HTTP |
+| --- | --- | --- |
+| `status` 非法或缺失 | 1001 | 400 |
+| 未登录 | 1002 | 401 |
+| **非作者** | 1003 | 403 |
+| 帖子不存在 | 1004 | 404 |
+| 违反白名单（含 `closed` 终态） | 1007 | 400 |
+| 并发下状态已被他人改动 | 1007 | 400 |
+
+> **并发保护**：更新语句是 `UPDATE posts SET status = ?, updated_at = ? WHERE id = ? AND status = ?`，
+> 末尾的 `AND status = ?` 是**乐观锁**。两个请求同时把 `open` 改成 `matched` 与 `closed` 时，
+> 后到的那个会因为 `status` 已不是 `open` 而更新 0 行，从而返回 1007，
+> 而不是静默覆盖前一次的结果。
+
+> **校验顺序**：`1001（枚举） → 1004（存在） → 1003（作者） → 1007（白名单）`。
+> 权限检查排在状态检查之前，越权者稳定拿到 403，不会因为「恰好状态也不允许」
+> 而拿到 1007 —— 那等于把帖子当前状态泄露给了无权操作它的人。
+
+```bash
+# open -> matched
+curl -X PATCH "http://localhost:8080/api/posts/1/status" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"status":"matched"}'
+
+# matched -> open：返回 1007
+curl -X PATCH "http://localhost:8080/api/posts/1/status" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"status":"open"}'
+```
+
+---
+
 ## POST /api/upload
 
 上传图片。
@@ -590,7 +795,6 @@ curl -X POST http://localhost:8080/api/upload \
 
 ## 待补章节（后续阶段）
 
-- 帖子列表（搜索 / 分页 / 筛选）—— P3
-- 状态流转 `PATCH /api/posts/:id/status` —— P3
 - 认领模块（审核 / 凭证码 / 核销联动）—— P6
-- AI 智能匹配（2-gram 相似度打分）—— P6
+- AI 智能匹配（2-gram 相似度打分，`GET /api/posts/:id/matches`）—— P6
+- 联系方式可见性规则第 4 条「双方存在已通过的认领关系」—— P6（需查 claims 表）
