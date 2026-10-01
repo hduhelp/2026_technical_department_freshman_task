@@ -30,3 +30,18 @@ export const CATEGORIES = [
 
 // 与后端 `JWT_EXPIRE_HOURS` 无关，仅用于前端展示口径
 export const PAGE_SIZE = 10
+
+// ===== 图片上传约束 =====
+// 必须与后端保持一致，否则会出现「前端放行、后端 1009」的错位：
+// - MAX_IMAGES   → SPEC 8.5「images ≤ 3」
+// - MAX_IMAGE_MB → 后端 UPLOAD_MAX_MB
+export const MAX_IMAGES = 3
+export const MAX_IMAGE_MB = 2
+
+// 上传文件选择框的 accept：与后端 allowedExtensions / allowedMIMEs 对齐
+export const ACCEPT_IMAGE_MIME = 'image/png,image/jpeg'
+
+// 前端预检用的 MIME 白名单。
+// 注意用 image/jpeg 而不是 image/jpg —— 后者不是合法 MIME，
+// 浏览器对 .jpg / .jpeg 一律上报 image/jpeg。
+export const IMAGE_MIME_REGEXP = /^image\/(png|jpeg)$/

@@ -21,4 +21,16 @@ export default defineConfig({
       '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
     },
   },
+  // ⚠️ preview 有自己独立的 proxy 配置，**不会**继承上面的 server.proxy。
+  // 不显式写一遍的话，`npm run preview` 打开的是构建产物，但它发出的 /api 请求
+  // 会打到 preview 服务器自己身上并 404 —— 页面能开、数据全是空的。
+  // P5 验收要求「npm run preview 也能正常用」，所以这里复刻一份。
+  preview: {
+    port: 4173,
+    host: true,
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true },
+      '/uploads': { target: 'http://localhost:8080', changeOrigin: true },
+    },
+  },
 })

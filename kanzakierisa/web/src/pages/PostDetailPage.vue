@@ -8,10 +8,11 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showConfirmDialog, showSuccessToast, showToast } from 'vant'
 
 import * as postApi from '@/api/post'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusActionSheet from '@/components/StatusActionSheet.vue'
 import { useUserStore } from '@/store/user'
 import {
   categoryLabel,
@@ -75,8 +76,37 @@ function goLogin() {
   router.push({ path: '/login', query: { redirect: `/posts/${post.value.id}` } })
 }
 
-function onStatusFlow() {
-  showToast('状态流转将在 P5 阶段开放')
+// ===== 作者操作（P5）=====
+
+/** 状态流转弹层。弹层自己调接口，成功后回调这里重拉详情 ——
+ *  不本地改 status，以后端落库结果为准（P5 常见坑 4）。 */
+const showStatusSheet = ref(false)
+
+function openStatusFlow() {
+  showStatusSheet.value = true
+}
+
+function onStatusSuccess() {
+  load()
+}
+
+function onDelete() {
+  showConfirmDialog({
+    title: '删除帖子',
+    message: `「${post.value.title}」删除后不可恢复，该帖下的认领申请也会一并删除。`,
+    confirmButtonText: '删除',
+    confirmButtonColor: '#ee0a24',
+  })
+    .then(async () => {
+      await postApi.remove(post.value.id)
+      showSuccessToast('已删除')
+      // 常见坑 6：这里必须用 replace 而不是 router.back()。
+      // 若用 back，浏览器的前进/后退缓存里仍留着这一页，
+      // 用户回到列表再点进去会看到「刚删掉的帖子」。
+      router.replace('/')
+    })
+    // 用户取消会 reject，吞掉
+    .catch(() => {})
 }
 
 function onClaim() {
@@ -196,8 +226,9 @@ async function copyContact() {
       <!-- 底部操作栏按身份渲染 -->
       <van-action-bar>
         <template v-if="isAuthor">
-          <van-action-bar-button type="warning" text="状态流转" @click="onStatusFlow" />
           <van-action-bar-button type="primary" text="编辑" @click="goEdit" />
+          <van-action-bar-button type="warning" text="改状态" @click="openStatusFlow" />
+          <van-action-bar-button type="danger" text="删除" @click="onDelete" />
         </template>
         <template v-else-if="isGuest">
           <van-action-bar-button type="primary" text="登录后联系" @click="goLogin" />
@@ -209,6 +240,14 @@ async function copyContact() {
           <van-action-bar-button type="primary" text="暂不可认领" disabled />
         </template>
       </van-action-bar>
+
+      <StatusActionSheet
+        v-if="isAuthor"
+        v-model:show="showStatusSheet"
+        :post-id="post.id"
+        :status="post.status"
+        @success="onStatusSuccess"
+      />
     </template>
   </div>
 </template>

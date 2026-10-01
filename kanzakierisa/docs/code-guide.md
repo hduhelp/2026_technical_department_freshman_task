@@ -340,6 +340,159 @@ func Parse(pageStr, sizeStr string) Page
 
 ---
 
+## P5 · 发布编辑、图片上传、状态流转与个人中心
+
+### 文件职责
+
+| 文件 | 职责 |
+| --- | --- |
+| `web/src/api/upload.js` | 上传接口封装。刻意不设 `Content-Type`（见下） |
+| `web/src/components/ImageUploader.vue` | 基于 `van-uploader` 的图片上传。内部持有对象数组，对外只吐 `string[]` URL |
+| `web/src/components/PostForm.vue` | 发布/编辑共用表单。props `initialValue` + 事件 `submit`，两处只维护一条校验路径 |
+| `web/src/components/StatusActionSheet.vue` | 状态流转弹层。选项由当前 status 推导，自己发请求、成功后 emit 服务端 DTO |
+| `web/src/pages/PostCreatePage.vue` | 发布页。成功后先 `reset()` 再跳详情 |
+| `web/src/pages/PostEditPage.vue` | 编辑页。挂载时读详情，`can_edit !== true` 直接退回首页 |
+| `web/src/pages/MePage.vue` | 个人中心。资料编辑 + 我的帖子（状态 tab + 卡片级快捷操作） |
+| `web/src/pages/PostDetailPage.vue` | 详情页。作者操作栏改为「编辑 / 改状态 / 删除」 |
+| `web/vite.config.js` | 新增 `preview.proxy`（Vite 的 preview **不继承** server.proxy） |
+
+### 关键设计决策（面试可讲点）
+
+#### 1. `van-uploader` 的 `beforeRead` 返回数组会被**静默忽略**
+
+需求是「用户一次选了 4 张，只留前 3 张并提示」。直觉写法是：
+
+```js
+// ❌ 无效
+const beforeRead = (files) => {
+  if (files.length > 3) { showToast('最多 3 张'); return files.slice(0, 3) }
+  return true
+}
+```
+
+但 Vant 只认 **boolean** 与 **Promise**：同步返回数组时，Vant 既不报错也不采用，
+仍然把全部 4 个文件交给 `after-read`。而组件上的 `:max-count="3"` 又是在
+**更早**的位置静默 `slice` —— 两个机制叠加，就会出现「提示弹了、但到底留了几张
+说不清」的状态。
+
+正确写法是把裁剪结果包成 Promise，让 Vant 用它**替换**文件列表：
+
+```js
+const beforeRead = (files) => {
+  const list = Array.isArray(files) ? files : [files]
+  const accepted = list.slice(0, remaining)
+  if (list.length > remaining) showToast(`最多上传 ${MAX_IMAGES} 张，已保留前 ${remaining} 张`)
+  return remaining === list.length ? true : Promise.resolve(accepted)
+}
+```
+
+另外必须加 `multiple` —— 否则 `<input>` 根本不允许多选，
+「一次选 4 张」这条用例连入口都触发不到。
+
+#### 2. 上传的 `fileList` 内部是对象、对外是 URL 数组
+
+- 父组件只关心 `v-model` 拿到 `string[]`（提交给后端的就是这个）
+- 子组件内部需要每个文件的 `status`（`uploading` / `done` / `failed`）来渲染遮罩与重试
+- 因此组件内以对象数组为**唯一真相**，用 `computed` 投影出 URL 数组向上 emit
+- 但投影出去的值会再作为 `props.modelValue` 回来（回显），若不设防会**清掉正在上传中的项**。
+  这里用 `lastEmitted` 做 JSON 比对：只有外部传入的值与自己上次吐出去的不同，
+  才认为是「外部真的改了」，才重建内部列表
+
+#### 3. `POST /api/upload` 绝不能手写 `Content-Type`
+
+`multipart/form-data` 必须带 boundary。手写 `'multipart/form-data'` 会把
+boundary 抹掉，服务端直接解析不出 `file` 字段。Axios 见到 `FormData` 会自动
+补正确的头，所以那行 `headers` 是**有害无益**的。
+
+#### 4. 单文件失败隔离：一张传失败不拖垮另外两张
+
+`after-read` 是**按文件**触发的（`multiple` 时每个文件各调一次），所以上传也
+按文件独立 `try/catch`：失败的那张标记 `failed` 并提示，其余照常写入 URL 数组。
+提交按钮的可用性只看「是否还有 `uploading`」，不看「是否有 `failed`」——
+失败项在最终 payload 里自然缺席。
+
+#### 5. `post-form__type` 为什么要搬出 `van-field`
+
+类型选择（失物 / 招领）最初放在 `van-field` 的 `#input` 插槽里。在 390px 宽下
+「我捡到东西」会被挤到换行，两行高度把整行撑歪。
+
+Vant 的 `van-field` 是给**单行文本**设计的，`#input` 插槽期望的也是一段行内内容。
+这里换成「整行 `van-cell` + 自定义 `post-form__type-wrap`」，
+并给标签加 `white-space: nowrap`，与「分类 / 地点」那些行的视觉语言反而更统一。
+
+#### 6. 编辑态禁用类型：不要指望 `RadioGroup` 的根节点带 `--disabled`
+
+`van-radio-group` 上给 `disabled` 后，**只有子 `van-radio` 会带 `.van-radio--disabled`**，
+group 根节点没有这个类；选中态也没有 `.van-radio--checked`（勾选样式只在 icon 上）。
+
+所以验证「编辑模式下类型不可改」不能只看类名，要两条一起：
+① `.van-radio-group .van-radio--disabled` 的数量等于 2；
+② **真的去点一下「招领」**，断言选中值仍是「失物」。
+只断言类名是「测框架」，加一次真实点击才是「测行为」。
+
+#### 7. 状态机的 UI 侧收敛：弹层选项由 status 推导
+
+`StatusActionSheet` 不接收父组件传选项，而是根据 `status` 自己算：
+
+| status | 可选项 |
+| --- | --- |
+| `open` | 标记已找到（→ `matched`）、直接结束（→ `closed`） |
+| `matched` | 标记已结束（→ `closed`） |
+| `closed` | 无（弹层显示「该帖子已结束」并禁用） |
+
+好处是「能不能流转」这条规则的**唯一权威仍在后端**（`1007` 拦截非法流转），
+前端只是把不可能的操作**不给出口**；即便有人绕过 UI，后端那道门依然在。
+
+#### 8. 编辑页的守卫：`can_edit` 而不是「本地比 user_id」
+
+编辑页挂载后读一次详情，若 `can_edit !== true` 就 toast「无权编辑」并 `replace` 回首页。
+
+这里坚持用服务端下发的 `can_edit`，而不是在前端用
+`currentUser.id === post.user_id` 自己算：一来 `can_edit` 的语义未来可能扩展
+（比如加管理员），二来前端自己算等于把权限判定复制了一份，
+一旦两边不一致就会出现「按钮显示但请求 403」的割裂体验。
+
+#### 9. CORS：为什么固定白名单会拦掉「同源的写请求」
+
+这是 P5 走查里唯一一个**真实的功能性缺陷**（不是测试脚本问题）。
+
+原本 `devOrigins` 只有 `localhost:5173` / `127.0.0.1:5173`。表现却很反直觉：
+
+- 手机连同一 Wi-Fi 打开 `http://10.150.56.221:5173` —— **列表能加载，一登录就失败**
+- `npm run preview`（4173）—— 同上
+
+原因在 Fetch 规范：**浏览器对同源的非 GET 请求同样会带 `Origin` 头**
+（POST / PUT / PATCH / DELETE 都带，GET 不带）。
+前端是经 Vite proxy 把 `/api` 转发到 8080 的，所以：
+
+| 视角 | 看到的 |
+| --- | --- |
+| 浏览器 | 同源请求（`http://10.150.56.221:5173` → 同源 `/api/...`） |
+| 服务端 | 一个带着 `Origin: http://10.150.56.221:5173` 的跨域 POST |
+
+于是 GET 列表畅通、写请求全被中间件 403，前端统一提示「网络异常，请检查连接」——
+一个**看起来像断网、实际是 CORS** 的误导性症状。
+
+修法是换成 `AllowOriginFunc`，按来源判定：回环地址 + 私有网段，
+**端口不限**（dev 5173 / preview 4173 / 以后换端口都不用改代码），
+公网域名与公网 IP 一律拒绝。
+
+> 复盘：这个缺陷能藏到 P5 才暴露，是因为 P1–P3 的验收全在
+> `localhost:5173` 这一个 Origin 上做的。**验收环境的多样性本身也是用例** ——
+> 只在一个「恰好落在白名单里」的地址上跑，等于把这条规则测没了。
+
+### 本阶段的验收证据
+
+- `go build ./...` / `go vet ./...` 零错误零警告
+- `npm run build` 成功（vite v8.3.1，381 modules，5.61s）
+- 浏览器走查（Edge，viewport 390×844）：发布编辑链路 27/27、个人中心与权限对照 13/13、
+  局域网 + preview 补跑 6/6
+- 后端防线 curl 逐条验证：越权 PUT → `1003`、未来时间 → `1001`、
+  非法流转 → `1007`、`.txt` 与伪造 `.png` 与 3MB → `1009`
+- 截图 54 张存于 `docs/screenshots/p5/`（命名 `p5-NN-描述.png`）
+
+---
+
 ## 环境注意事项
 
 ### Windows 下导入 seed 需显式指定 charset

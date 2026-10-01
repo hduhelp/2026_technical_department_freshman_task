@@ -793,6 +793,52 @@ curl -X POST http://localhost:8080/api/upload \
 
 ---
 
+## 前端接入注意事项（P5 补充）
+
+### 1. `POST /api/upload` 的请求头
+
+前端封装（`web/src/api/upload.js`）**故意不设置 `Content-Type`**：
+
+```js
+export const upload = (file) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post('/upload', fd)   // 不要加 Content-Type
+}
+```
+
+浏览器需要在 `Content-Type` 里带上 `multipart/form-data; boundary=----xxx` 中的
+boundary。一旦手写成 `'multipart/form-data'`，boundary 就丢了，
+服务端 `c.FormFile("file")` 会直接解析失败（表现为 1009「文件字段缺失」）。
+Axios 检测到 `FormData` 时会自动补齐正确的头，交给它即可。
+
+### 2. 图片「只增不删」——本阶段的已知取舍
+
+P5 **没有**做「删除已上传图片」的接口，因此存在两种文件残留：
+
+| 场景 | 结果 |
+| --- | --- |
+| 用户上传了图片，但最终没点「立即发布」就退出 | 文件留在 `server/uploads/`，无任何帖子引用它 |
+| 帖子被删除 / 图片被从表单里移除 | 同上，文件不回收 |
+
+**为什么不顺手做掉：** 图片与帖子是「先会后合」的关系（先上传拿到 URL，再随帖子
+提交），要正确回收就需要引用计数或延迟清扫任务，属于独立议题；本阶段以
+「不写坏数据」优先，宁可留下孤儿文件。生产化时的做法是加一个定期任务，
+把 `uploads/` 中超过 N 小时仍未被任何 `posts.images` 引用的文件清掉。
+
+### 3. 开发期 CORS 策略
+
+`server/internal/middleware/cors.go` 在 `APP_ENV != production` 时，
+通过 `AllowOriginFunc` 放行 **回环地址 + 私有网段（10/8、172.16/12、192.168/16、fc00::/7）**
+的任意端口；生产环境直接直通、不添加任何 CORS 头。
+
+判定改成「按来源」而不是「固定白名单」的原因见 `docs/code-guide.md` 的 P5 章节：
+浏览器对**同源的非 GET 请求**同样会带 `Origin` 头，而前端是经 Vite proxy 转发
+`/api` 的 —— 于是「手机连同一个 Wi-Fi 访问 `http://<电脑IP>:5173`」和
+`npm run preview`（4173）这两条链路，写请求都会被白名单拦成 403。
+
+---
+
 ## 待补章节（后续阶段）
 
 - 认领模块（审核 / 凭证码 / 核销联动）—— P6
