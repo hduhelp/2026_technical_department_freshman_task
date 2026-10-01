@@ -486,10 +486,10 @@ group 根节点没有这个类；选中态也没有 `.van-radio--checked`（勾�
 - `go build ./...` / `go vet ./...` 零错误零警告
 - `npm run build` 成功（vite v8.3.1，381 modules，5.61s）
 - 浏览器走查（Edge，viewport 390×844）：发布编辑链路 27/27、个人中心与权限对照 13/13、
-  局域网 + preview 补跑 6/6
+  局域网 + preview 补跑 6/6、昵称同步补验 2/2
 - 后端防线 curl 逐条验证：越权 PUT → `1003`、未来时间 → `1001`、
   非法流转 → `1007`、`.txt` 与伪造 `.png` 与 3MB → `1009`
-- 截图 54 张存于 `docs/screenshots/p5/`（命名 `p5-NN-描述.png`）
+- 截图 56 张存于 `docs/screenshots/p5/`（命名 `p5-NN-描述.png`）
 
 ---
 
