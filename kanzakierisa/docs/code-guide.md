@@ -1,10 +1,874 @@
 # 代码说明文档
 
-> 随阶段推进增量维护。当前已覆盖 **P1 认证模块 / P3 列表搜索、分页与状态机 /
-> P5 发布编辑与图片上传 / P6 认领审核流与智能匹配**。
-> P2 的 CRUD 细节在 P7 阶段并档补全。
+> 面向「第一次打开这个仓库的人」：先讲清**整体结构**与**数据怎么流**，
+> 再逐条说明**关键实现为什么这么写**。
+>
+> 全文分两部分：
+> - **第一部分（一～六章）**是本项目的完整技术说明，按「概览 → 目录 → 数据库 →
+>   关键实现 → 安全 → 限制」组织，与 SPEC 的章节一一对应；
+> - **第二部分（附录）**是按开发阶段累积的「面试可讲点」明细（P1 / P3 / P5 / P6），
+>   包含大量踩坑记录与取舍理由，可作为第一部分的展开阅读。
+>
+> 如果你只有 10 分钟，读第一部分的一、四、五章即可抓住全貌。
 
-本文档将覆盖：目录结构说明、分层职责（handler → service → store）、关键设计决策、可讲点。
+---
+
+# 第一部分 · 项目技术说明
+
+## 一、项目概览
+
+### 1.1 这是什么
+
+一个校园失物招领平台。核心业务闭环是：
+
+```
+发帖（失物 / 招领） → 浏览 / 搜索 / 筛选 → 提交认领申请 → 帖主审核
+      → 生成 6 位电子凭证码 → 线下见面核销 → 帖子自动结束 → 领取「拾金不昧证书」
+```
+
+「认领」是整个系统里唯一有多人竞争、有状态流转、有权限不对称的链条，
+也是技术密度最高的部分。
+
+### 1.2 技术栈与选型理由
+
+| 层 | 选型 | 为什么 |
+| --- | --- | --- |
+| 后端框架 | Go 1.27 + Gin | 任务指定；Gin 中间件模型清晰，便于把鉴权/日志/CORS 分层 |
+| 数据访问 | `database/sql` + `sqlx` | **任务硬要求：手写参数化 SQL，禁用 ORM**。sqlx 只做「结果集 → 结构体」的映射，不生成 SQL |
+| 数据库 | MySQL 8.0 | 任务指定；生成列、JSON 列、`FOR UPDATE` 都用到了 |
+| 认证 | JWT HS256 + bcrypt(cost=10) | 无状态、易水平扩展；bcrypt 自带盐与可调成本 |
+| 前端 | Vue 3（`<script setup>`）+ Vite + Vant 4 | 移动端优先；Vant 的组件与「校园随手拍」的使用场景吻合 |
+| 状态管理 | Pinia | 只有「当前用户」一个全局状态，Pinia 足够且比 Vuex 简洁 |
+| HTTP 客户端 | Axios | 需要请求/响应双拦截器（注入 token、统一翻译错误码） |
+
+> **为什么不用 ORM**：本项目刻意练习手写 SQL。具体收益在三处体现得最明显：
+> ① 联系方式可见性用 `CASE WHEN ... EXISTS (...)` 下推（ORM 很难表达）；
+> ② `COUNT(*)` 与 `SELECT` 复用同一个 WHERE 构造器（跨查询复用条件）；
+> ③ 唯一索引冲突要按**索引名**翻译成不同业务码（ORM 通常只抛一个笼统的约束错误）。
+
+### 1.3 分层职责
+
+**依赖单向向下，不允许反向 import。**
+
+```
+       ┌──────────────────────────────────────────────┐
+       │                     main                     │  ← 启动、优雅关闭
+       └───────────────────────┬──────────────────────┘
+                               ▼
+       ┌──────────────────────────────────────────────┐
+       │                    router                    │  ← 唯一的路由真源；中间件顺序；依赖装配
+       └──────────┬───────────────────────┬───────────┘
+                  ▼                       ▼
+       ┌────────────────────┐   ┌────────────────────┐
+       │     middleware     │   │      handler       │  ← HTTP 编解码 + 参数校验，**零 SQL**
+       └──────────┬─────────┘   └─────────┬──────────┘
+                  │                       ▼
+                  │            ┌────────────────────┐
+                  │            │      service       │  ← 业务规则（状态机 / 可见性 / 打分 / 事务编排）
+                  │            └─────────┬──────────┘
+                  │                      ▼
+                  │            ┌────────────────────┐
+                  └───────────▶│       store        │  ← 手写参数化 SQL，**零 HTTP 概念**
+                               └─────────┬──────────┘
+                                         ▼
+                                  database/sql + sqlx
+```
+
+三条硬规矩：
+
+| 层 | 能做 | **不做** |
+| --- | --- | --- |
+| `handler` | 解 JSON、解析路径/查询参数、调 service、写响应 | 不写 SQL、不做业务判断 |
+| `service` | 业务规则、校验顺序、事务编排、错误码语义 | 不碰 `gin.Context`、不拼 SQL 字符串 |
+| `store` | 参数化 SQL、1062 冲突翻译、行数上报 | 不 import `gin`、不决定「该报哪个业务码」 |
+
+**一个具体的反向依赖规避**：`middleware.Auth` 需要「按 id 回查用户」，
+若直接依赖 `*service.AuthService`，依赖图就会出现 `router → middleware → service`
+这条额外连线，破坏「单向向下」。因此 middleware 里定义了两个窄接口：
+
+```go
+type TokenParser interface { Parse(token string) (int64, error) }
+type UserLoader interface { Authenticate(c *gin.Context, userID int64) (*model.User, error) }
+```
+
+再由 `router` 里的 `authLoader` 适配器把 `AuthService` 接上去：
+
+```go
+type authLoader struct{ svc *service.AuthService }
+var _ middleware.UserLoader = (*authLoader)(nil)   // 编译期断言
+```
+
+收益：中间件可独立单测（塞个假 parser 即可），依赖图保持树状不成环。
+
+### 1.4 一次请求的完整流转
+
+以「**登录用户 alice 打开某张 found 帖的详情页**」为例，走一遍全链路：
+
+```
+浏览器 GET /api/posts/12  (Authorization: Bearer eyJ...)
+   │
+   ▼ ① Vite dev proxy（5173 → 8080，仅开发期，规避跨域）
+   ▼
+┌─ Gin Engine ────────────────────────────────────────────────┐
+│ ② RequestID 中间件   → 生成/透传 X-Request-ID，写入日志上下文  │
+│ ③ Logger             → 记录 method / path / status / 耗时     │
+│ ④ Recover            → panic 兜底，转成 5000，不让进程退出     │
+│ ⑤ CORS               → 非生产环境按来源放行（回环 + 私网）      │
+│ ⑥ OptionalAuth       → 软鉴权：解析 Bearer，失败也放行         │
+│      └ Parse(token) → uid                                    │
+│      └ Authenticate(ctx, uid) → 回查 users 表                │
+│      └ 成功 → c.Set("currentUser", u)；失败 → 保持游客        │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─ PostHandler.Detail ────────────────────────────────────────┐
+│ ⑦ parseIDParam(c,"id")  → 非正整数即 1001                     │
+│ ⑧ 从 context 取 user（可能是 nil = 游客）                     │
+│ ⑨ 调 PostService.GetDetail(ctx, postID, viewer)              │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─ PostService.GetDetail ─────────────────────────────────────┐
+│ ⑩ 取 viewerID（游客传 0）                                     │
+│ ⑪ 调 store.GetByID(ctx, postID, viewerID, withContact=true)  │
+│      └ 若返回 sql.ErrNoRows → 翻译成 1004                     │
+│ ⑫ viewOf(c, inList=false) 组装 PostView（含 can_edit/can_claim）│
+│ ⑬ 若已登录，再查 my_claim（当前用户在这张帖上的申请）           │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+┌─ PostStore.GetByID ─────────────────────────────────────────┐
+│ ⑭ SELECT ... (contactCaseSQL 决定 contact 是否返回真实值)     │
+│     FROM posts p JOIN users u ON u.id = p.user_id            │
+│     WHERE p.id = ?                                           │
+│     ↑ 一条 SQL 同时产出 contact 与 contact_visible 的判定依据  │
+└──────────────────────────┬──────────────────────────────────┘
+                           ▼
+        ⑮ ToPostDTO() → 白名单式裁剪（无 password_hash）
+        ⑯ response.OK(c, dto) → {"code":0,"message":"ok","data":{...}}
+```
+
+几个值得注意的点：
+
+- **第 ⑥ 步失败不报错**：软鉴权在 token 失效时静默降级为游客，而不是返回 1002。
+  理由见 [第二章的中间件表](#23-中间件middleware)。
+- **第 ⑦ 步是唯一的 400 来源**：查询参数（分页越界、枚举非法）一律容错，
+  只有路径参数非法才报 1001。
+- **第 ⑭ 步是隐私的关键**：联系方式是否进入应用内存，由 SQL 决定，
+  不是查出来再删。详见 [五、安全措施](#五安全措施)。
+
+---
+
+## 二、目录结构
+
+### 2.1 顶层
+
+```
+kanzakierisa/
+├── README.md              项目说明、启动步骤、测试账号、设计思考
+├── docs/
+│   ├── api.md             19 个接口的完整契约（请求/响应/错误码）
+│   ├── code-guide.md      本文件
+│   ├── wireframe/         页面线框
+│   └── screenshots/       浏览器走查截图（p5/ 56 张、p6/ 30 张）
+├── server/                后端（Go）
+└── web/                   前端（Vue 3 + Vite）
+```
+
+### 2.2 后端 `server/`
+
+```
+server/
+├── cmd/api/main.go                    入口：加载配置 → 建连接池 → 组装路由 → 优雅关闭
+├── internal/
+│   ├── config/config.go               .env 加载与校验；DSN 拼装（固定 loc=UTC）
+│   ├── db/db.go                       连接池参数、Ping、时区设置
+│   ├── router/router.go               ★ 唯一的路由真源 + 依赖装配
+│   ├── middleware/
+│   │   ├── requestid.go               注入 X-Request-ID
+│   │   ├── recover.go                 panic 兜底 → 5000
+│   │   ├── cors.go                    按来源放行（回环 + 私网）
+│   │   ├── auth.go                    强制鉴权 + CurrentUser(c)
+│   │   └── optional_auth.go           软鉴权（失败放行为游客）
+│   ├── handler/                       HTTP 编解码层（零 SQL）
+│   │   ├── auth_handler.go            register / login / logout
+│   │   ├── user_handler.go            GET me / PATCH me
+│   │   ├── post_handler.go            创建/列表/详情/更新/删除/状态流转/我的帖子
+│   │   ├── upload_handler.go          图片上传（体积 → 扩展名 → 魔数）
+│   │   ├── claim_handler.go           提交/查看/审核/核销/我的认领
+│   │   └── match_handler.go           智能匹配
+│   ├── service/                       业务规则层
+│   │   ├── validator.go               用户名/密码/帖子字段/认领证明的长度与格式校验
+│   │   ├── auth_service.go            注册、登录、鉴权回查
+│   │   ├── user_service.go            查自己、改自己
+│   │   ├── post_service.go            帖子 CRUD + 状态机（导出 ValidateTransition）
+│   │   ├── claim_service.go           认领校验顺序、审核、核销、凭证码重试
+│   │   └── match_service.go           SPEC 7.4 打分与排序
+│   ├── store/                         手写 SQL 层（零 HTTP）
+│   │   ├── querier.go                 Querier 接口：抹平「连接池 or 事务」的差异
+│   │   ├── user_store.go              users 表 SQL
+│   │   ├── post_store.go              posts 表 SQL + 联系方式可见性 CASE
+│   │   └── claim_store.go             claims 表 SQL + 1062 按索引名翻译
+│   ├── model/                         实体与 DTO
+│   │   ├── user.go                    User / UserDTO / 三个请求体
+│   │   ├── post.go                    Post / PostDTO / AuthorBrief / CreatePostReq ...
+│   │   ├── claim.go                   Claim / ClaimDTO / MyClaimDTO / 三个请求体
+│   │   └── errors_helper.go           MySQL 1062 判定 + 索引名常量
+│   └── pkg/                           无状态工具包（纯函数，可独立单测）
+│       ├── apperr/                    统一错误类型 + 13 个错误码
+│       ├── response/                  统一响应信封
+│       ├── jwtutil/                   HS256 签发/解析（算法白名单）
+│       ├── password/                  bcrypt 封装
+│       ├── pagination/                分页参数解析与夹取
+│       ├── valid/                     枚举白名单 + 状态机白名单
+│       ├── voucher/                   6 位凭证码生成/规范化/形态校验
+│       └── similar/                   中文 2-gram 相似度
+├── sql/
+│   ├── schema.sql                     建库建表（含 approved_flag 生成列）
+│   └── seed.sql                       3 用户 + 16 帖 + 2 认领的演示数据
+├── Makefile                           run/build/vet/test/schema/seed/up/down
+├── docker-compose.yml                 MySQL 8.0 一键起（方式 A）
+├── .env.example                       配置模板（.env 已被 gitignore）
+└── uploads/                           图片落盘目录（内容不入库，仅留 .gitkeep）
+```
+
+`pkg/` 与 `internal/` 的分界标准：**能不能不依赖任何本项目其它包单独测试**。
+`apperr`、`similar`、`voucher`、`pagination` 都满足，因此它们是纯函数，
+不持有任何状态。
+
+### 2.3 前端 `web/`
+
+```
+web/
+├── index.html
+├── vite.config.js          alias @ → src；dev 与 preview 各配一份 proxy
+└── src/
+    ├── main.js             createApp + Pinia + Router + Vant 全量注册
+    ├── App.vue             根组件（<router-view>）
+    ├── router/index.js     8 条路由 + 全局前置守卫（需登录的页面拦截）
+    ├── store/user.js       Pinia：当前用户、token、登录/登出动作
+    ├── api/
+    │   ├── request.js      Axios 实例；双拦截器（注入 token / 翻译错误码）
+    │   ├── auth.js         注册 / 登录 / 登出
+    │   ├── user.js         GET me / PATCH me
+    │   ├── post.js         帖子 7 个接口
+    │   ├── upload.js       上传（刻意不设 Content-Type）
+    │   └── claim.js        认领 5 个接口 + 匹配接口
+    ├── constants/index.js  枚举、MAX_IMAGES=3、MAX_IMAGE_MB=2
+    ├── utils/format.js     时间 UTC→本地、状态/类型/分类的中文映射
+    ├── components/
+    │   ├── PostCard.vue            列表卡片
+    │   ├── PostForm.vue            发布/编辑共用表单
+    │   ├── ImageUploader.vue       图片上传（对象数组↔URL 数组）
+    │   ├── StatusActionSheet.vue   状态流转弹层
+    │   ├── ClaimCard.vue           认领卡（manage / mine 双模式）
+    │   ├── MatchList.vue           匹配推荐区块
+    │   ├── HonorCertificate.vue    拾金不昧证书（canvas 导出 PNG）
+    │   └── EmptyState.vue          空态
+    └── pages/
+        ├── PostListPage.vue        首页：搜索 / 筛选 / 无限滚动
+        ├── PostDetailPage.vue      详情：轮播 / 认领 / 匹配 / 作者操作
+        ├── PostCreatePage.vue      发布
+        ├── PostEditPage.vue        编辑（can_edit 守卫）
+        ├── ClaimManagePage.vue     帖主审核台
+        ├── MyClaimsPage.vue        我的认领
+        ├── MePage.vue              个人中心
+        └── LoginPage.vue           登录 / 注册
+```
+
+**前端状态的一条原则**：服务端下发的 DTO 是唯一真相。
+组件不本地「猜」新状态（比如审核成功后不把 `status` 直接改成 `approved`），
+而是 `emit('success')` 让父页面**重新拉取**，以后端落库结果为准。
+
+---
+
+## 三、数据库设计
+
+### 3.1 表关系
+
+```
+users ──1:N──▶ posts ──1:N──▶ claims
+  ▲                              │
+  └──────────1:N─────────────────┘   (claimant_id)
+```
+
+三张表，两个外键都是 `ON DELETE CASCADE`：
+
+- 删用户 → 其帖子与其发出的认领一并清理
+- 删帖子 → 该帖下的认领一并清理（应用层**不写任何删 claims 的 SQL**）
+
+### 3.2 表结构要点
+
+#### users
+
+| 列 | 类型 | 说明 |
+| --- | --- | --- |
+| `username` | VARCHAR(32) | `UNIQUE KEY uk_username`；格式由 Go 侧正则约束 |
+| `password_hash` | VARCHAR(100) | bcrypt 结果固定 60 字符，留足余量；**绝不出现在任何 API 响应里** |
+| `contact` / `contact_public` | VARCHAR(64) / TINYINT | 联系方式的「值」与「是否公开」分离存储 |
+| `role` | VARCHAR(16) | `user` / `admin`；**不放进 JWT**，每次回查数据库 |
+
+#### posts
+
+| 列 | 类型 | 说明 |
+| --- | --- | --- |
+| `type` | VARCHAR(8) | `lost` / `found`，用 CHECK 语义由 `valid` 包保证 |
+| `images` | JSON | 存 URL 字符串数组；空时是 `[]` 而非 NULL |
+| `status` | VARCHAR(16) | `open` / `matched` / `closed` |
+| — | 索引 | `idx_type_status(type,status)`、`idx_category`、`idx_created`、`idx_user` |
+
+四个索引都是照着查询写的：列表筛选走 `idx_type_status`，时间排序走 `idx_created`，
+「我的帖子」走 `idx_user`，匹配的候选集查询走 `idx_type_status`。
+
+#### claims
+
+| 列 | 类型 | 说明 |
+| --- | --- | --- |
+| `status` | VARCHAR(16) | `pending` / `approved` / `rejected` / `redeemed` |
+| `voucher_code` | VARCHAR(16) NULL | `UNIQUE KEY uk_voucher_code`；未通过时为 NULL |
+| `reject_reason` | VARCHAR(255) | 超长按 rune 截断 |
+| `approved_flag` | **生成列** | 见下 |
+| — | 唯一索引 | `uk_post_claimant(post_id, claimant_id)`、`uk_post_approved(post_id, approved_flag)` |
+
+### 3.3 核心亮点：用生成列 + 唯一索引表达「最多一条已通过认领」
+
+**业务约束**：一张帖子最多只能有一条「已通过」的认领记录。
+
+**应用层写法为什么不行**：「先 `SELECT` 有没有 approved，没有就 `INSERT`」在并发下必然失效 ——
+两个请求同时查到「没有」，然后双双插入。这不是理论问题：认领正是
+「多个同学同时抢一个失物」的场景，天然高并发。
+
+**数据库解法**：MySQL 8 没有「部分索引」（只对满足条件的行建索引），
+但可以用**生成列 + 唯一索引**绕出来：
+
+```sql
+approved_flag TINYINT GENERATED ALWAYS AS (
+  IF(status IN ('approved','redeemed'), 1, NULL)
+) STORED,
+UNIQUE KEY uk_post_approved (post_id, approved_flag)
+```
+
+原理：`status` 是 `approved`/`redeemed` 时 `approved_flag = 1`，否则是 `NULL`。
+而 **MySQL 的唯一索引允许任意多个 `NULL`**（`NULL != NULL`），于是：
+
+| 情形 | `(post_id, approved_flag)` | 是否冲突 |
+| --- | --- | --- |
+| 同一帖多条 `pending` | `(5, NULL)`、`(5, NULL)`、… | 不冲突 ✅ |
+| 同一帖多条 `rejected` | `(5, NULL)`、`(5, NULL)`、… | 不冲突 ✅ |
+| 同一帖第二条 `approved` | `(5, 1)` 已存在 → 再插 `(5, 1)` | **冲突** ❌ |
+
+两个设计细节：
+
+1. **`redeemed` 也计入 `1`**。如果只把 `approved` 映射成 `1`，
+   那么核销后认领离开 `approved` 态，就会腾出一个 `(post_id, 1)` 的空位，
+   让第二条申请能通过 —— 交接已完成还允许再通过一条，这是明确的 bug。
+2. **`STORED` 而非 `VIRTUAL`**：唯一索引可以建在两者之上，
+   但 `STORED` 的取舍是为可读性 —— 直接用 `SELECT approved_flag` 就能肉眼验证规则。
+
+实测确认（seed 数据）：
+
+```
+ERROR 1062 (23000): Duplicate entry '5-1' for key 'claims.uk_post_approved'
+```
+
+这条约束连「有人绕过应用层直接写库」都挡住了 ——
+**把业务不变量变成数据库约束，比任何应用层检查都可靠**。
+
+### 3.4 三处时间处理的一致性
+
+| 位置 | 设置 | 解决什么 |
+| --- | --- | --- |
+| `schema.sql` 开头 | `SET time_zone = '+00:00'` | 直接用 SQL 导入时，`DEFAULT CURRENT_TIMESTAMP` 按 UTC 求值 |
+| 应用 DSN | `parseTime=true&loc=UTC&time_zone='+00:00'` | 连接会话时区固定 UTC，Go 按 UTC 解析 |
+| Go 输出层 | `time.Format(time.RFC3339)` | 不依赖 json 包对 `time.Time` 的默认序列化 |
+| Go 写入层 | `time.Now().UTC().Truncate(time.Second)` | 不用 SQL 的 `NOW()`（它返回会话时区的墙上时间） |
+
+**原则：时间只从一处产生、只以一种时区存储。** 四处任一失效都会造成「差 8 小时」。
+详见 [附录 P3 第 5 点](#5-updated_at-为什么不交给-sql-的-now)。
+
+---
+
+## 四、关键实现思路
+
+本章按 SPEC 第 7 章的编号逐节展开。每节统一用「**问题 → 解决 → 为什么**」三段。
+
+### 4.1 状态机（SPEC 7.1）
+
+**问题**：帖子有 `open → matched → closed` 的流转，且存在两条路径可以改变它：
+作者手动点按钮、认领流程自动联动。如果两处各写一套规则，迟早分叉。
+
+**解决**：白名单只定义一次，并**导出**。
+
+```go
+// internal/pkg/valid/valid.go
+var allowedTransitions = map[string][]string{
+    StatusOpen:    {StatusMatched, StatusClosed},
+    StatusMatched: {StatusClosed},
+    StatusClosed:  {},   // 终态：空切片 = 没有出边
+}
+```
+
+```go
+// internal/service/post_service.go —— 刻意首字母大写
+func ValidateTransition(from, to string) error
+
+// 两条路径共用一个核心
+ChangeStatus         // 作者手动：加一层作者校验，再调 applyStatusChange
+changeStatusAsSystem // 系统自动：不加作者校验，直接调 applyStatusChange
+```
+
+**为什么**：认领流程（P6）在 `approve` / `redeem` 时要触发帖子状态变化，
+必须复用这同一个函数。若在 `claim_service` 里再写一份规则表，
+两份定义迟早分叉 —— 那正是状态机最典型的失效方式：
+**手动流转拦得住的非法跳转，自动流转却放过去了**。
+
+配套的两个细节：
+
+- **乐观锁**：`UPDATE posts SET status = ?, updated_at = ? WHERE id = ? AND status = ?`。
+  末尾的 `AND status = ?` 保证并发改状态时，后到的请求更新 0 行 → 返回 1007，
+  而不是静默覆盖。
+- **校验顺序固定**：`1001（枚举）→ 1004（存在）→ 1003（作者）→ 1007（白名单）`。
+  权限检查排在状态检查之前，越权者稳定拿到 403，不会因为「恰好状态也不允许」
+  而拿到 1007 —— 那等于把帖子当前状态泄露给了无权操作它的人。
+
+### 4.2 联系方式三级可见性（SPEC 7.2）
+
+**问题**：`author.contact` 是否可见，取决于请求者身份与业务关系（四条规则）；
+且 SPEC 硬要求**在 SQL 层决定是否 SELECT**，不能查出来再在内存里删。
+
+**解决**：把整条判定写进 SELECT 列表的一个 `CASE` 表达式。
+
+```sql
+CASE
+  WHEN ? = p.user_id                        THEN u.contact   -- ① 本人
+  WHEN u.contact_public = 1                 THEN u.contact   -- ② 作者主动公开
+  WHEN EXISTS (SELECT 1 FROM claims c                       -- ③ 已通过的认领关系
+               WHERE c.post_id = p.id
+                 AND c.claimant_id = ?
+                 AND c.status IN ('approved','redeemed'))
+                                            THEN u.contact
+  ELSE ''
+END AS author_contact
+```
+
+**为什么**：两个不可替代的收益。
+
+1. **不进入应用内存**：不可见时数据库直接返回空串，真实联系方式从未离开数据库。
+   这不是「查出来再删掉」——后者的数据已经进过 Go 的内存、可能进日志、可能进 panic 栈。
+2. **不可能自相矛盾**：`contact` 与 `contact_visible` 出自**同一条 SQL 语句**，
+   因此不可能出现 `contact_visible=true` 但 `contact=""` 这类响应。
+   如果可见性在 SQL 里算、联系方式在 Go 里清空，一旦有人只改了一边就会出现这种响应。
+
+**列表接口更进一步**：`GET /api/posts` 与 `GET /api/users/me/posts` 干脆
+**不 SELECT 这一列**（`author.contact` 恒为 `""`）。
+一次批量查询里少带走一批联系方式 —— 列表页从不展示它，多查一列只是白白扩大泄露面。
+
+实现上用一个「列清单函数」保证详情与列表不跑偏：
+
+```go
+func postSelectColumns(withContact bool, viewerID int64) string   // 同一份列清单
+func postSelectArgs(withContact bool, viewerID int64) []any       // 孪生函数，参数顺序对齐
+```
+
+若两处各写一份列清单，迟早出现「一边多查了一列、另一边忘了加」。
+
+`model.ToPostDTO` 里还有一层「列表强制空串」的收窄，作为**纵深防御** ——
+将来谁改了 store 的 SELECT 清单，「列表不泄露联系方式」这条规则也不会失守。
+
+### 4.3 认领流程与凭证（SPEC 7.3）
+
+**问题**：认领是一个「多人竞争、有状态流转、有权限不对称」的流程，
+且要在并发下保证业务不变量。
+
+**解决**：四层防护叠加。
+
+| 层 | 手段 | 拦什么 |
+| --- | --- | --- |
+| 入口预检 | `service.Apply` 固定 7 步校验顺序 | 给出友好错误文案（1001/1004/1007/1008/1010） |
+| 数据库约束 | `uk_post_claimant`、`uk_post_approved` | **并发下的重复提交**（应用层预检的 TOCTOU 窗口） |
+| 行锁 | 审核/核销时 `SELECT ... FOR UPDATE` | 并发审核同一认领 |
+| 状态条件 | `UPDATE ... WHERE id = ? AND status = 'pending'` | 万一 `FOR UPDATE` 被误删，`RowsAffected==0` 会报错而非静默成功 |
+
+**校验顺序**（SPEC 7.3，故意固定）：
+
+| # | 校验 | 失败 code |
+| --- | --- | --- |
+| 1 | `proof` 长度 10–500 | 1001 |
+| 2 | 帖子存在 | 1004 |
+| 3 | 帖子类型必须是 `found` | 1001 |
+| 4 | 帖子未 `closed` | 1007 |
+| 5 | 不能认领自己发的帖 | 1001 |
+| 6 | 我没在这张帖上申请过 | 1008 |
+| 7 | 这张帖还没有已通过的认领 | 1010 |
+
+**为什么第 3 条排在第 4 条前面**：对一条 `lost` 帖提交认领，要拿到的是
+「只能认领招领帖」这个语义（1001），而不是「帖子已结束」（1007）。
+两者对 `lost + closed` 的帖会给出不同答案，验收清单同时覆盖了这两种输入，
+只有这个顺序能同时满足。
+
+**凭证码的三个设计点**：
+
+```go
+const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  // 剔除 0 O 1 I L
+const Length     = 6
+const codeSpace  = len(alphabet)                     // 32 = 2^5
+```
+
+1. **剔除形近字符**：这串码要被人念给对方听、或手抄在纸上，
+   `0/O`、`1/I/L` 混淆会直接导致核销失败，且失败原因很难排查。
+2. **字母表长度取 32（2 的幂）**：可以用位掩码 `b[0] & 31` 代替取模。
+   取模在这里其实也均匀（256 是 32 的整数倍），但把「长度必须是 2 的幂」
+   写进代码，以后有人往字母表里加字符会在 review 时立刻被这个掩码提醒到。
+3. **碰撞靠唯一索引兜底 + 有界重试**：`uk_voucher_code` 是硬约束，
+   service 捕获到专用哨兵 `ErrVoucherCodeConflict` 后**重试至多 5 次**。
+   用哨兵错误而非 `apperr`：这不是要返回给用户的业务错误，而是 service 内部的重试信号；
+   做成 `apperr.CodeXxx` 就会穿过 service 边界变成一个 HTTP 状态码，语义被污染。
+
+**核销时的恒定时间比较**：
+
+```go
+func matchVoucher(stored *string, input string) bool {
+    if stored == nil { return false }
+    want := *stored
+    if len(want) != len(input) { return false }   // 先比长度
+    return subtle.ConstantTimeCompare([]byte(want), []byte(input)) == 1
+}
+```
+
+`subtle.ConstantTimeCompare` 在长度不同时返回 0，但**不保证**这种情况下的时间恒定。
+所以先比长度（长度不是秘密，凭证码固定 6 位），再对等长切片做恒定时间比较。
+
+### 4.4 智能匹配（SPEC 7.4）
+
+**问题**：为一张帖推荐「可能互补」的帖（`lost` 找 `found`，反之亦然），
+需要可解释的相似度。
+
+**解决**：规则打分，四个维度加权求和，阈值过滤。
+
+| 维度 | 分值 | 判定 |
+| --- | --- | --- |
+| 分类相同 | +40 | `category` 非空且相等 |
+| 地点相近 | +30 | 地点字符串的中文 2-gram 有交集 |
+| 时间接近 | +20 | `happened_at` 相差 ≤ 24 小时 |
+| 标题相似 | +10 | 标题的中文 2-gram 有交集 |
+
+- 总分 **≥ 60** 才进结果集，**最多 5 条**
+- 排序：分数降序；同分按 `happened_at` 降序（**稳定排序**，结果可复现）
+- 候选集：`type` 取补集、`status='open'`、`id <> 本帖`，走 `idx_type_status`，
+  并 `LIMIT 200` 兜底
+
+**为什么用 2-gram 而不是分词**：中文没有空格，通用分词需要词典且易引入误差。
+2-gram（相邻两字切片）无需词典、对错别字有一定容忍度，且**完全可解释** ——
+用户能看到 `reasons` 里「地点吻合 +30」这样的具体理由，
+比一个黑盒相似度分数更适合「校园失物」这种需要人工判断的场景。
+
+**为什么必须有 `LIMIT 200`**：候选集查询在数据量增长后可能返回上万行，
+逐行打分的 CPU 开销会失控。取最近的 200 条作为候选是「够用且可控」的折中 ——
+匹配本就是锦上添花，不需要全局最优。
+
+### 4.5 图片上传（SPEC 7.5）
+
+**问题**：用户上传的文件不可信，既要防「改了扩展名的可执行文件」，
+也要防路径穿越。
+
+**解决**：三重校验 + 重命名 + 路径前缀确认。
+
+| 步骤 | 规则 | 失败 |
+| --- | --- | --- |
+| 1. 体积 | `file.Size` ≤ 2MB | 1009 |
+| 2. 扩展名 | ∈ {`.jpg`,`.jpeg`,`.png`}（不区分大小写） | 1009 |
+| 3. 魔数 | 读前 512 字节，`http.DetectContentType` ∈ {`image/jpeg`,`image/png`} | 1009 |
+
+**为什么三重都要**：只信扩展名会被「把 .exe 改名成 .png」绕过；
+只信魔数则无法快速拒绝明显不合法的请求（且要读满 512 字节）。
+三者同时成立才放行。
+
+**路径安全**：
+
+- 落盘名固定 `uuid.NewString() + 小写扩展名`，**绝不使用原始文件名**
+- 目标路径经 `filepath.Abs` 归一化后与上传根目录做**前缀比较**，
+  比较时补 `os.PathSeparator` —— 避免 `/data/uploads-evil` 被 `/data/uploads`
+  误判为「在目录内」
+
+### 4.6 列表、搜索与分页（SPEC 8.4 / 8.6）
+
+**问题**：这是任务原文点名要练习 `WHERE / LIKE / ORDER BY / LIMIT / OFFSET` 的地方，
+也是最容易出现「看不到的 bug」的地方。
+
+**解决**：三个关键决策。
+
+**① `COUNT(*)` 与 `SELECT` 复用同一个 WHERE 构造器**
+
+```go
+func buildPostWhere(f ListFilter) (string, []any)   // 纯函数，无状态
+
+func (s *PostStore) List(ctx, f, limit, offset, ...) {
+    where, args := buildPostWhere(f)   // ← 同一份
+}
+func (s *PostStore) Count(ctx, f) {
+    where, args := buildPostWhere(f)   // ← 同一份
+}
+```
+
+**为什么必须复用**：如果两处各拼一套条件，`total` 取自 A、`list` 取自 B，
+前端就会看到「翻到第 3 页突然空了，但 `total` 还显示有 200 条」。
+这是列表接口最经典、也最难通过单个接口测试发现的 bug —— 因为第 1 页看起来完全正常。
+
+**② 稳定排序 `ORDER BY created_at DESC, id DESC`**
+
+`created_at` 精度到秒。同一秒创建的两条帖子若只按时间排序，
+MySQL 不保证两次查询的相对顺序一致，分页就会出现「第 1 页和第 2 页
+同时出现某条，另一条永远看不到」。追加主键做次级排序键，顺序才是全局确定的。
+
+**③ 分页夹取、筛选容错**
+
+| 输入 | 结果 |
+| --- | --- |
+| `page` 非数字 / < 1 | `1` |
+| `pageSize` 非数字 | `10` |
+| `pageSize` > 50 | `50` |
+| `type=lostt`（枚举非法） | 忽略该条件，返回全部 |
+
+**为什么是容错而不是报错**：筛选条件与分页参数同源（都由前端按点击拼 URL）。
+既然 `pageSize` 越界走的是「夹取不报错」，枚举非法也应当走同一条路，
+否则同一类输入会出现两套处理方式。
+已知代价是 `?type=lostt` 这类笔误会静默返回全部结果 ——
+前端因此把用户的选择限制在下拉/标签控件里，从源头避免传错值。
+
+**SQL 注入防护**：拼进 SQL 的只有**硬编码的固定片段**（`" AND p.type = ?"` 这类常量），
+用户输入一律走 `?` 占位符：
+
+```go
+where += " AND (p.title LIKE ? OR p.description LIKE ?)"
+kw := "%" + f.Keyword + "%"
+args = append(args, kw, kw)
+```
+
+注意这里是**把 `%kw%` 作为参数传进去**，而不是拼接字符串，
+也不是用 `CONCAT('%', ?, '%')` —— 后者把拼接动作推给数据库、掩盖了
+「参数就是纯数据」这件事。
+
+### 4.7 认证与鉴权（SPEC 9）
+
+**问题**：JWT 与 bcrypt 的用法有多个经典坑。
+
+**解决**：五个具体措施。
+
+**① bcrypt cost 固定 10**，`Verify` 任何失败都返回 `false`（不区分原因）。
+
+**② 登录的时序侧信道防护**：用户名不存在时，代码**仍然跑一次 bcrypt 比对**。
+
+```go
+u, err := s.users.GetByUsername(ctx, username)
+if err != nil {
+    if appErr, ok := apperr.As(err); ok && appErr.Code == apperr.CodeNotFound {
+        password.Verify(dummyHash, req.Password)   // 关键：消耗等量 CPU
+        return nil, apperr.New(apperr.CodeBadCredentials)
+    }
+    ...
+}
+```
+
+否则「用户不存在」因为跳过 bcrypt（cost=10 约需几十毫秒）会明显更快返回，
+攻击者仅凭响应时间就能枚举出哪些用户名真实存在。
+
+**③ JWT 算法白名单**（防 `alg: none` 与算法混用）：
+
+```go
+jwt.ParseWithClaims(token, &Claims{}, keyFunc,
+    jwt.WithValidMethods([]string{signingMethod.Alg()}),   // 只接受 HS256
+    jwt.WithExpirationRequired(),                           // 必须有 exp
+)
+```
+
+`keyFunc` 里还额外断言了 `t.Method` 必须是 `*jwt.SigningMethodHMAC` —— 双保险。
+
+**④ 验签通过后必须回查数据库**：token 里的 `uid` 只证明「**签发时**该用户存在」，
+无法反映「此刻是否已被删除」。因此 `middleware.Auth` 在验签成功后回查 users 表；
+查不到就返回 **1002**（而不是 1004）—— 从请求者视角这不是「资源找不到」，
+而是「你的登录状态已无效」，前端据此清 token 并跳登录页。
+
+**⑤ token 载荷只放 `uid`**，不放昵称、角色等可变量。
+代价是每个受保护请求多一次主键查询（走聚簇索引，开销很低），
+换来的是权限判定始终以数据库为准。
+
+---
+
+## 五、安全措施
+
+以下是本项目实际落地的防护措施清单，逐条对应实现位置。
+
+### 5.1 密码与凭证
+
+| 措施 | 实现位置 |
+| --- | --- |
+| bcrypt cost=10，自带盐 | `pkg/password` |
+| 明文密码永不落库、永不入日志 | `model.User.PasswordHash` json tag 为 `-`；对外只输出 `UserDTO` |
+| 登录失败不区分「用户不存在」与「密码错误」 | `service/auth_service.go` → 1006 |
+| 用户名不存在也执行一次 bcrypt（**防时序侧信道**） | `service/auth_service.go` 的 `dummyHash` 分支 |
+| 凭证码用 `subtle.ConstantTimeCompare`（**防时序侧信道**） | `service/claim_service.go` 的 `matchVoucher` |
+| 注册重名靠唯一索引 + 1062（**防 TOCTOU**） | `store/user_store.go` → 1005 |
+
+### 5.2 鉴权与会话
+
+| 措施 | 实现位置 |
+| --- | --- |
+| JWT 仅接受 HS256（**防 `alg: none`**） | `pkg/jwtutil` 的 `WithValidMethods` |
+| 必须有 `exp` 声明 | `pkg/jwtutil` 的 `WithExpirationRequired` |
+| 验签后再回查用户存在性 | `middleware/auth.go` → `Authenticate` |
+| token 只含 `uid`，不含可变的昵称/角色 | `pkg/jwtutil` 的 `Claims` 结构 |
+| 越权访问统一 1003（**不泄露资源状态**） | `service/post_service.go` 校验顺序：权限先于状态 |
+
+### 5.3 数据访问
+
+| 措施 | 实现位置 |
+| --- | --- |
+| **全部 SQL 参数化**，无字符串拼接用户输入 | `store/*.go` 所有方法 |
+| LIKE 用 `?` 传 `%kw%`，不用 `CONCAT` | `store/post_store.go` 的 `buildPostWhere` |
+| 联系方式可见性**下推到 SQL**（未授权值不进内存） | `store/post_store.go` 的 `contactCaseSQL` |
+| 列表接口**不 SELECT** 联系方式列 | `postSelectColumns(withContact=false)` |
+| DTO 白名单裁剪（不靠「记得删」） | `model/*.go` 的 `ToXxxDTO` |
+| 列清单用函数统一，避免多处不一致 | `postSelectColumns` / `claimCoreColumns` |
+
+### 5.4 权限控制
+
+| 接口 | 规则 | 非授权结果 |
+| --- | --- | --- |
+| PUT / DELETE 帖子 | 仅作者 | 1003 |
+| PATCH /posts/:id/status | 仅作者 | 1003 |
+| GET /posts/:id/claims | **仅帖主（admin 也不行）** | 1003 |
+| PATCH /claims/:id | 帖主 **或** admin | 1003 |
+| POST /claims/:id/redeem | **仅帖主（admin 也不行）** | 1003 |
+
+注意认领两处**刻意的不对称**：
+
+- **审核允许 admin，读取不允许**：审核是处置事故，读取是窥探纠纷细节，
+  两者不该共用一个权限口径。
+- **核销不给 admin 开口子**：核销是「东西真的交出去了」这个线下事实的登记，
+  管理员代登记会污染交接记录的可信度。
+
+### 5.5 输入校验
+
+| 项 | 规则 | 实现位置 |
+| --- | --- | --- |
+| 用户名 | `^[A-Za-z0-9_]{3,32}$` | `service/validator.go` |
+| 密码 | 6–64 位 | 同上 |
+| 昵称 | ≤32 字符 | 同上 |
+| 联系方式 | ≤64 字符 | 同上 |
+| 帖子标题 | 1–64 **rune**（中文按字算，不按字节） | 同上 |
+| 帖子描述 | ≤2000 rune | 同上 |
+| `happened_at` | 不晚于「当前 + 1 小时」（容差） | 同上 |
+| 图片 URL | 必须 `/uploads/` 前缀且不含 `..` | 同上 |
+| 认领证明 | 10–500 rune | 同上 |
+| 拒绝理由 | ≤255 rune，**超长截断**而非报错 | `service/claim_service.go` |
+| 枚举参数 | 白名单校验（请求体）/ 静默忽略（查询参数） | `pkg/valid` + `service/*` |
+
+长度一律按 **rune** 计（`utf8.RuneCountInString`）：中文标题用字节计会 3 倍超长，
+一个 22 字的中文标题会被误判为「超过 64」。
+
+### 5.6 文件上传
+
+| 措施 | 说明 |
+| --- | --- |
+| 体积上限 | ≤2MB（`UPLOAD_MAX_MB` 可配） |
+| 扩展名白名单 | `.jpg` / `.jpeg` / `.png`（不区分大小写） |
+| **魔数校验** | `http.DetectContentType` 前 512 字节，防「改扩展名」绕过 |
+| 重命名 | `uuid + 扩展名`，**绝不使用原始文件名** |
+| 路径穿越防护 | `filepath.Abs` + 前缀比较（补 `os.PathSeparator`） |
+| 静态目录无鉴权 | 图片是公开资源，`/uploads` 不走 `/api`、不加中间件 |
+
+### 5.7 错误处理
+
+| 措施 | 说明 |
+| --- | --- |
+| 统一错误类型 `apperr.Error{Code, HTTPStatus, Message, cause}` | 一处定义 HTTP 状态与文案的映射 |
+| 5000 不暴露内部细节 | cause 只进日志，不进响应体 |
+| panic 兜底 | `middleware.Recover` → 5000，不让进程退出 |
+| 请求 ID 贯穿 | `middleware.RequestID` → 日志可关联单次请求 |
+
+---
+
+## 六、已知限制与后续优化
+
+这些是**有意留下的缺口**，不是遗漏。每一条都写明了不做的理由与生产化的做法。
+
+### 6.1 图片只增不删（孤儿文件）
+
+| 场景 | 结果 |
+| --- | --- |
+| 上传了图片但没点「发布」 | 文件留在 `uploads/`，无帖子引用 |
+| 帖子被删除 / 图片从表单移除 | 文件不回收 |
+
+**不做的理由**：图片与帖子是「先会后合」的关系（先上传拿 URL，再随帖子提交），
+要正确回收需要引用计数或延迟清扫任务，属于独立议题。
+
+**生产化做法**：定期任务扫描 `uploads/`，把超过 N 小时仍未被任何
+`posts.images` 引用的文件清掉。
+
+### 6.2 无服务端 token 黑名单
+
+登出仅前端清 token，已被签发的 token 在过期前依然有效。
+
+**不做的理由**：SPEC 第 12 章明确列入「明确不做」。引入黑名单需要额外存储
+与逐请求查询，对校园场景收益不明显。
+
+**生产化做法**：用 Redis 存「已登出 token 的 jti」并设 TTL（与 token 有效期一致），
+或改用短期 access token + refresh token。
+
+### 6.3 匹配是「规则」而非「语义」
+
+2-gram 是字面相似度，无法理解「黑色卡套」与「黑色手机壳」是两类物品。
+
+**不做的理由**：任务要求可解释、可离线验证的规则化匹配。
+引入向量检索需要额外基础设施与语料，超出本期范围。
+
+**生产化做法**：用句向量模型（如 bge-small）做语义召回，
+再叠加现有规则打分做精排 —— 现有 `reasons` 机制可以直接保留。
+
+### 6.4 无分页游标（深分页性能）
+
+`LIMIT offset, size` 在 `offset` 很大时会扫描并丢弃大量行。
+
+**不做的理由**：校园场景数据量级在万级以内，`offset` 不会很大。
+
+**生产化做法**：改游标分页（`WHERE (created_at, id) < (?, ?)`），
+正好利用已有的 `(created_at DESC, id DESC)` 排序键。
+
+### 6.5 无自动化测试用例
+
+`go test ./...` 全部返回 `[no test files]`。
+
+**不做的理由**：本项目的时间主要投在了「用手写 SQL 把业务做对」与
+「用真实 curl + 浏览器走查留存证据」上。SPEC 未要求自动化测试。
+
+**生产化做法**：优先补三层 ——
+① `pkg/*` 的纯函数单测（`similar`、`voucher`、`pagination`、`apperr`）；
+② `service` 层用 `sqlmock` 或真实测试库跑状态机与认领校验顺序；
+③ 端到端用 `httptest` 覆盖 13 个错误码。
+
+### 6.6 无 rate limiting
+
+登录接口没有防暴力破解的速率限制。
+
+**不做的理由**：SPEC 未要求；单机部署时在校验层做会引入额外状态。
+
+**生产化做法**：网关层按 IP + 用户名做滑动窗口限流，
+登录失败达阈值后叠加指数退避。
+
+### 6.7 其他明确不做的项
+
+与 README 的「明确不做」一致：校园统一身份认证对接、线上支付 / 酬谢金、
+站内私信 IM、拾主主动认领 `lost` 帖、对象存储（图片存本地）。
+
+---
+
+# 第二部分 · 附录：按阶段的开发记录
+
+> 以下内容按开发阶段（P1 → P6）累积，是第一部分各章节的**展开与证据**。
+> 包含大量踩坑记录、取舍理由与本阶段的验收证据，适合作为深入阅读。
+>
+> 建议阅读顺序：先看完第一部分，再按兴趣跳读本附录中对应的条目。
+
+---
+
+## 附录 A · 阶段通用的分层约定
 
 **分层约定**
 
@@ -14,7 +878,7 @@
 
 ---
 
-## P1 · 认证模块
+### 附录 B · P1 认证模块
 
 ### 文件职责
 
@@ -144,14 +1008,19 @@ token 里的 `uid` 只证明「**签发时**该用户存在」，无法反映「
 后者会带上 DSN 里 `loc` 指定的时区，一旦与前端假设不符就会出现差 8 小时的经典 bug。
 在 DSN 里固定 `loc=UTC`、在输出层固定 RFC3339，两端就都不会漂。
 
-### 待补充的可讲点（后续阶段）
+### 已补充到第一部分的两个可讲点
 
-- `claims.approved_flag` 生成列 + `UNIQUE(post_id, approved_flag)` 如何在数据库层保证「一个帖子最多一条通过记录」（MySQL 唯一索引允许多个 NULL）
-- AI 智能匹配的 2-gram 相似度打分与稳定排序
+以下两点在 P1 / P3 阶段标注为「待后续阶段补充」，现已完整写进第一部分：
+
+- `claims.approved_flag` 生成列 + `UNIQUE(post_id, approved_flag)` 如何在数据库层
+  保证「一个帖子最多一条通过记录」（MySQL 唯一索引允许多个 NULL）
+  → 见 **[3.3 核心亮点](#33-核心亮点用生成列--唯一索引表达最多一条已通过认领)**
+- 智能匹配的 2-gram 相似度打分与稳定排序
+  → 见 **[4.4 智能匹配（SPEC 7.4）](#44-智能匹配spec-74)**
 
 ---
 
-## P3 · 列表搜索、分页与状态机
+### 附录 C · P3 列表搜索、分页与状态机
 
 > 对应 SPEC 第 7.1 章（状态机）、第 8.4/8.6 章（列表接口与手写 SQL）。
 > 这是任务原文点名要求练习 `WHERE / LIKE / ORDER BY / LIMIT / OFFSET` 的地方。
@@ -341,7 +1210,7 @@ func Parse(pageStr, sizeStr string) Page
 
 ---
 
-## P5 · 发布编辑、图片上传、状态流转与个人中心
+### 附录 D · P5 发布编辑、图片上传、状态流转与个人中心
 
 ### 文件职责
 
@@ -494,7 +1363,7 @@ group 根节点没有这个类；选中态也没有 `.van-radio--checked`（勾�
 
 ---
 
-## P6 · 认领审核流、电子凭证核销与智能匹配
+### 附录 E · P6 认领审核流、电子凭证核销与智能匹配
 
 ### 文件职责
 
@@ -923,7 +1792,7 @@ van-list 不会重新挂载，所以必须手动 `fetchClaims()`。
 
 ---
 
-## 环境注意事项
+### 附录 F · 环境注意事项
 
 ### Windows 下导入 seed 需显式指定 charset
 
