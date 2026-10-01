@@ -1,0 +1,20 @@
+# 本地开发用 MySQL 8.0。
+# 若本机已安装 MySQL 8，可不用本文件，直接手动建库并导入 sql/schema.sql。
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lostfound-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: lostfound123
+      MYSQL_DATABASE: lost_found
+      TZ: UTC
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports: ["3306:3306"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      retries: 20
+volumes:
+  mysql-data:
