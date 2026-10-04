@@ -45,7 +45,7 @@
             <option value="丢失">丢失</option>
             <option value="招领">招领</option>
         </select>
-        <input id="keyword" placeholder="搜索物品名 / 描述" style="flex:1; min-width:160px;">
+        <input id="keyword" placeholder="搜索物品名 / 描述 / 帖子ID" style="flex:1; min-width:160px;">
         <select id="order">
             <option value="desc">最新在前</option>
             <option value="asc">最早在前</option>
@@ -223,6 +223,7 @@
                 ["状态",     STATUS_TEXT[item.status] || item.status],
                 ["发布者",   item.publisher],
                 ["发布时间", item.created_at],
+                ["帖子ID", item.item_id],
             ];
 
             for (const [label, value] of fields){

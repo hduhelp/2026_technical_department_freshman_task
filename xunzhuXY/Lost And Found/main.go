@@ -145,6 +145,25 @@ type RegisterReq struct {
 
 var jwtKey = []byte(os.Getenv("JWT_KEY")) //密钥储存在环境变量里面
 const UploadDir = "./uploads"
+const matchPrompt = `
+你是失物招领系统的匹配助手。任务：判断【目标帖】和每一个【候选帖】描述的是不是【同一件物品】。
+## 判断标准
+1. 只有指向【同一件具体的物品】才判 "same"。
+2. 判 "same" 需要至少满足【两项】吻合：
+   - 物品类别与外观特征（颜色、品牌、材质、明显标记/挂饰/贴纸/磨损）
+   - 地点（相同或相邻，例如"七教北306"与"七教北"可视为吻合）
+   - 时间（丢失与拾取时间接近，通常在数天内）
+   - 其他独有细节（如"伞柄贴纸""内衬有字"）
+3. ★ 不要因为"物品类别相同"就判 same —— 两个都是"雨伞"很常见。
+4. 信息不足时判 "maybe"，不要猜。
+5. ★ 判 same / maybe 时，reason 里【必须引用原文中的具体字词】，
+   不能写"描述相似""类别一致"这类空话。
+6. 类别明显不同（如伞 vs 手机）直接判 "no"。
+## 输出格式
+只输出一个 JSON 对象，不要解释、不要 markdown 代码块：
+{"matches":[{"item_id":3,"verdict":"same","reason":"依据：两帖均提到黑色折叠伞与伞柄蓝色贴纸，地点均为七教北"}]}
+verdict 只能是 "same" / "maybe" / "no"。
+每个候选都要输出一条（包括 no）。`
 
 // 将items简洁输出，舍去私密信息
 func toResp(it Item) ItemResp {
@@ -276,13 +295,13 @@ func main() {
 			args = append(args, typeQ)
 		}
 		if keyword != "" {
-			where = append(where, "(title LIKE ? OR description LIKE ?)")
-			args = append(args, "%"+keyword+"%", "%"+keyword+"%")
+			where = append(where, "(title LIKE ? OR description LIKE ? OR item_id LIKE ?)")
+			args = append(args, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 		}
 		whereSQL := ""
 		if len(where) > 0 {
 			whereSQL = " WHERE " + strings.Join(where, " AND ")
-			//变成了 WHERE type = ? AND (title LIKE ? OR description LIKE ?
+			//变成了 WHERE type = ? AND (title LIKE ? OR description LIKE ? OR item_id LIKE ?)
 		}
 
 		// ⑤ 总数（只带过滤参数）
@@ -297,7 +316,7 @@ func main() {
                        happened_at, description, contact_info, image, status, created_at
                 FROM items` + whereSQL + ` ORDER BY created_at ` + orderSQL + ` LIMIT ? OFFSET ?`
 		//语句变为SELECT item_id, publisher, user_id, type, title, place, happened_at, description, contact_info, image, status, created_at
-		//      FROM items WHERE type = ? AND (title LIKE ? OR description LIKE ?) ORDER BY created_at ASC/DESC LIMIT ? OFFSET ?
+		//      FROM items WHERE type = ? AND (title LIKE ? OR description LIKE ? OR item_type LIKE ?) ORDER BY created_at ASC/DESC LIMIT ? OFFSET ?
 		args = append(args, size, offset)
 		rows, err := DB.Query(pageSQL, args...) //输入row
 		if err != nil {
@@ -604,11 +623,89 @@ func main() {
 		return
 	})
 
-	/*
-		r.GET("/user", func(c *gin.Context) {
-			c.JSON(200, gin.H{"ok": true, "data": users})
-		})
-	*/
+	r.POST("/items/:id/match", AuthMiddleware(), func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id")) //保证id为整数
+		if err != nil {
+			c.JSON(400, gin.H{"ok": false, "msg": "id应该为数字！"})
+			return
+		}
+
+		// ① 查目标帖（跟 PUT 一样的查法）
+		var target Item
+		err = DB.QueryRow(`SELECT item_id, publisher, user_id, type, title, place,
+                              happened_at, description, contact_info, image, status, created_at
+                       FROM items WHERE item_id = ?`, id).
+			Scan(&target.ItemID, &target.Publisher, &target.UserID, &target.Type,
+				&target.Title, &target.Place, &target.HappenedAt, &target.Description,
+				&target.ContactInfo, &target.Image, &target.Status, &target.CreatedAt)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				c.JSON(404, gin.H{"ok": false, "msg": "没找到该信息"})
+				return
+			}
+			c.JSON(500, gin.H{"ok": false, "msg": "内部错误"})
+			return
+		}
+		// ★★ 只有自己的帖才能跑匹配（不然别人拿你的 id 就能烧你的额度）
+		if target.UserID != c.GetInt("user_id") {
+			c.JSON(403, gin.H{"ok": false, "msg": "无权操作"})
+			return
+		}
+		var cands []Item
+		rows, err := DB.Query(`SELECT item_id, type, title, place, happened_at, description
+                           FROM items
+                           WHERE type = ? AND item_id <> ? AND created_at >= ?
+                           ORDER BY created_at DESC LIMIT 20`, reverseOf(target.Type), id, time.Now().AddDate(0, 0, -14).Format("2006-01-02 15:04:05"))
+		if err != nil {
+			c.JSON(500, gin.H{"ok": false, "msg": "内部错误"})
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var it Item
+			if err := rows.Scan(&it.ItemID, &it.Type, &it.Title, &it.Place,
+				&it.HappenedAt, &it.Description); err != nil {
+				c.JSON(500, gin.H{"ok": false, "msg": "内部错误"})
+				return
+			}
+			if err := rows.Err(); err != nil {
+				c.JSON(500, gin.H{"ok": false, "msg": "内部错误"})
+				return
+			}
+			cands = append(cands, it)
+		}
+
+		if len(cands) == 0 { // ★ 没候选就别调模型了
+			c.JSON(200, gin.H{"ok": true, "result": []MatchResult{}})
+			return
+		}
+
+		// ③ 调模型 —— ★★ 失败【降级】：记日志 + 空数组 + 200
+		reply, err := askLLM(buildMatchPrompt(target, cands))
+		if err != nil {
+			log.Println("匹配调用失败:", err)
+			c.JSON(200, gin.H{"ok": true, "result": []MatchResult{}})
+			return
+		}
+		result, err := parseMatches(reply)
+		if err != nil {
+			log.Println("匹配解析失败:", err)
+			c.JSON(200, gin.H{"ok": true, "result": []MatchResult{}})
+			return
+		}
+
+		// ④ 过滤 + 排序（same 前、maybe 后）
+		filtered := make([]MatchResult, 0, len(result))
+		for _, pass := range []string{"same", "maybe"} {
+			for _, r := range result {
+				if r.Verdict == pass {
+					filtered = append(filtered, r)
+				}
+			}
+		}
+		c.JSON(200, gin.H{"ok": true, "result": filtered})
+	})
 
 	r.PUT("/items/:id", AuthMiddleware(), func(c *gin.Context) {
 		id, err := strconv.Atoi(c.Param("id")) //保证id为整数

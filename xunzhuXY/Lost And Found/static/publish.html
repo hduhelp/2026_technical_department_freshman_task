@@ -81,6 +81,27 @@
                 }
                 out.textContent = "发布成功 ✓\n" + JSON.stringify(data, null, 2);
 
+                try {
+                    const matchRes = await fetch("/items/" + data.data.item_id + "/match", {
+                        method: "POST",
+                        headers: { "Authorization": "Bearer " + token },
+                    });
+                    if (matchRes.ok) {
+                        const md = await matchRes.json();
+                        const list = md.result || [];
+                        if (list.length > 0) {
+                            const lines = list.slice(0, 3).map(r =>          // ★ 只取 3 条
+                                "· 帖号 " + r.item_id + "：" +
+                                (r.verdict === "same" ? "很可能是同一件" : "可能相关") + "\n  " + r.reason
+                            ).join("\n");
+                            alert("★ 似乎有人发布了相关帖子：\n\n" + lines + "\n\n（可在首页搜索查看详情）");
+                        }
+                        // ★ 没匹配 → 什么都不做（静默 ✓）
+                    }
+                } catch (e) {
+                    console.error("匹配请求失败:", e);      // ★ 只在控制台留记录，不打扰用户
+                }
+
             } catch (e){
                 out.textContent = "请求失败：" + e.message;
             }
