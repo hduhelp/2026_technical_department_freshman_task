@@ -20,7 +20,7 @@
  */
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showSuccessToast, showToast } from 'vant'
+import { showConfirmDialog, showImagePreview, showSuccessToast, showToast } from 'vant'
 
 import * as claimApi from '@/api/claim'
 import * as postApi from '@/api/post'
@@ -52,6 +52,45 @@ const images = computed(() => {
   const list = post.value?.images
   return Array.isArray(list) ? list : []
 })
+
+/**
+ * 图片轮播的当前下标。
+ *
+ * ⚠️ 为什么需要自己维护 active：Vant 4 的 Swipe **只监听 touch 事件**
+ * （Swipe.mjs 里只有 onTouchStart / onTouchMove / onTouchEnd / onTouchcancel，
+ * 一个 onMouse* 都没有），默认指示器也是纯 div、没有 onClick。
+ * 后果是**在桌面浏览器里用鼠标完全拖不动，也无法点圆点切换** ——
+ * 演示时表现为「只能看到第一张」。
+ *
+ * 修法：左右加显式箭头 + 自定义可点击指示器，全部走 Swipe 实例暴露的
+ * next() / prev() / swipeTo()，这样手机（触摸滑动）和桌面（点按）都能用。
+ */
+const swipeRef = ref(null)
+const activeIndex = ref(0)
+const hasMultiple = computed(() => images.value.length > 1)
+
+function onSwipeChange(index) {
+  activeIndex.value = index
+}
+function goPrev() {
+  swipeRef.value?.prev()
+}
+function goNext() {
+  swipeRef.value?.next()
+}
+function goTo(index) {
+  swipeRef.value?.swipeTo(index)
+}
+
+/** 点图放大查看，顺带解决「看不清细节」的问题 */
+function previewImage(index) {
+  showImagePreview({
+    images: images.value,
+    startPosition: index,
+    closeable: true,
+    loop: false,
+  })
+}
 
 const isAuthor = computed(() => post.value?.can_edit === true)
 const isGuest = computed(() => !userStore.isLogin)
@@ -231,16 +270,60 @@ async function copyContact() {
     <template v-else-if="post">
       <!-- 图片：有图轮播，无图给占位 -->
       <div class="detail-page__media">
-        <van-swipe
-          v-if="images.length"
-          :autoplay="0"
-          indicator-color="#1989fa"
-          class="detail-page__swipe"
-        >
-          <van-swipe-item v-for="(img, index) in images" :key="index">
-            <img class="detail-page__img" :src="img" alt="帖子配图" />
-          </van-swipe-item>
-        </van-swipe>
+        <div v-if="images.length" class="detail-page__gallery">
+          <van-swipe
+            ref="swipeRef"
+            :autoplay="0"
+            :show-indicators="false"
+            :loop="hasMultiple"
+            class="detail-page__swipe"
+            @change="onSwipeChange"
+          >
+            <van-swipe-item v-for="(img, index) in images" :key="index">
+              <img
+                class="detail-page__img"
+                :src="img"
+                alt="帖子配图"
+                @click="previewImage(index)"
+              />
+            </van-swipe-item>
+          </van-swipe>
+
+          <!-- 左右箭头：桌面端鼠标无法拖动 touch-only 的 Swipe，必须给可点的控件 -->
+          <template v-if="hasMultiple">
+            <button
+              type="button"
+              class="detail-page__arrow detail-page__arrow--prev"
+              aria-label="上一张"
+              @click.stop="goPrev"
+            >
+              <van-icon name="arrow-left" size="16" />
+            </button>
+            <button
+              type="button"
+              class="detail-page__arrow detail-page__arrow--next"
+              aria-label="下一张"
+              @click.stop="goNext"
+            >
+              <van-icon name="arrow" size="16" />
+            </button>
+          </template>
+
+          <!-- 右下角计数，任何时候都能看出总共有几张 -->
+          <div class="detail-page__counter">{{ activeIndex + 1 }} / {{ images.length }}</div>
+
+          <!-- 自定义可点击圆点（Vant 默认指示器是纯 div，点不动） -->
+          <div v-if="hasMultiple" class="detail-page__dots">
+            <span
+              v-for="(img, index) in images"
+              :key="index"
+              class="detail-page__dot"
+              :class="{ 'is-active': index === activeIndex }"
+              @click.stop="goTo(index)"
+            />
+          </div>
+        </div>
+
         <div v-else class="detail-page__noimg">
           <van-icon name="photo-o" size="30" />
           <span>发布者没有上传图片</span>
@@ -473,6 +556,10 @@ async function copyContact() {
   background: #fff;
 }
 
+.detail-page__gallery {
+  position: relative;
+}
+
 .detail-page__swipe {
   height: 240px;
 }
@@ -482,6 +569,81 @@ async function copyContact() {
   height: 240px;
   object-fit: cover;
   display: block;
+  /* 桌面端用鼠标时给个手型，暗示可点开大图 */
+  cursor: zoom-in;
+}
+
+/* 左右切换箭头 —— 桌面端唯一可行的切换方式（Vant Swipe 只认 touch） */
+.detail-page__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* 保证在图片之上 */
+  z-index: 2;
+}
+
+.detail-page__arrow:hover {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.detail-page__arrow--prev {
+  left: 10px;
+}
+
+.detail-page__arrow--next {
+  right: 10px;
+}
+
+/* 右下角「当前 / 总数」 */
+.detail-page__counter {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 2;
+}
+
+/* 自定义可点击圆点 */
+.detail-page__dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.detail-page__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: width 0.2s, background 0.2s;
+}
+
+.detail-page__dot.is-active {
+  width: 16px;
+  border-radius: 4px;
+  background: #1989fa;
 }
 
 .detail-page__noimg {

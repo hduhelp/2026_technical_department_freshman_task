@@ -1,0 +1,22 @@
+# 统一换行符，避免跨平台协作时脚本失效。
+#
+# 背景：Windows 默认 core.autocrlf=true，会把文本文件在检出时转成 CRLF。
+# .sh 脚本一旦带上 CRLF，bash 会在每行末尾把 \r 当成命令的一部分而报错
+# （典型报错：$'\r': command not found）。
+
+# Shell 脚本必须是 LF，否则 Linux / macOS 上无法执行
+*.sh   text eol=lf
+*.bash text eol=lf
+
+# Windows 批处理必须是 CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# 二进制文件不做换行转换
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.exe  binary
