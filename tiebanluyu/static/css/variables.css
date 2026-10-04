@@ -1,0 +1,119 @@
+/* ==========================================================================
+   设计变量（Design Tokens）
+   --------------------------------------------------------------------------
+   把颜色、间距、圆角、字号全部集中在这里定义。
+   好处：想调整整体风格只改这一个文件，不用满项目找散落的色值。
+
+   配色思路：
+     · 主色用青蓝（teal），给人"干净、可信、公共服务"的感觉，
+       符合校园工具类产品的定位（不像社交产品那样花哨）
+     · 失物用琥珀色、招领用翠绿色，两者一眼可分
+     · 中性色偏冷灰，让彩色的状态标签更突出
+   ========================================================================== */
+
+:root {
+  /* ---------- 主色 ---------- */
+  --color-primary: #0080FF;
+  --color-primary-hover: #005ebd;
+  --color-primary-light: #ccfbdf;
+  --color-primary-soft: #f0fdfa;
+
+  /* ---------- 语义色 ---------- */
+  --color-lost: #b45309; /* 寻物启事：琥珀 */
+  --color-lost-bg: #fef3c7;
+  --color-found: #047857; /* 招领启事：翠绿 */
+  --color-found-bg: #d1fae5;
+
+  --color-success: #15803d;
+  --color-success-bg: #dcfce7;
+  --color-warning: #a16207;
+  --color-warning-bg: #fef9c3;
+  --color-danger: #b91c1c;
+  --color-danger-bg: #fee2e2;
+  --color-info: #1d4ed8;
+  --color-info-bg: #dbeafe;
+
+  /* ---------- 中性色（划掉） 我定制为暖色型 ---------- */
+  --color-text: #0f172a;
+  --color-text-soft: #475569;
+  --color-text-muted: #94a3b8;
+  --color-border: #FFEBCD;
+  --color-border-strong: #cbd5e1;
+  --color-bg: #f4f6dd;
+  --color-surface: #e5f1c9;
+  --color-surface-soft: #ebf4ec;
+
+  /* ---------- 圆角 ---------- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  /* ---------- 间距 ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---------- 字号 ---------- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 26px;
+  --text-2xl: 34px;
+
+  /* ---------- 阴影 ---------- */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 6px 20px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 14px 40px rgba(15, 23, 42, 0.16);
+
+  /* ---------- 其它 ---------- */
+  --header-height: 64px;
+  --container-max: 1120px;
+  --transition: 160ms ease;
+}
+
+/* 深色模式：只覆盖必要的变量，其余样式自动适配。
+   这是用 CSS 变量做主题的最大好处 —— 不用写两套样式。 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-text: #e2e8f0;
+    --color-text-soft: #cbd5e1;
+    --color-text-muted: #64748b;
+    --color-border: #1e293b;
+    --color-border-strong: #334155;
+    --color-bg: #0b1220;
+    --color-surface: #111c2e;
+    --color-surface-soft: #16233a;
+
+    --color-primary: #2dd4bf;
+    --color-primary-hover: #5eead4;
+    --color-primary-light: #134e4a;
+    --color-primary-soft: #0f2a29;
+
+    --color-lost-bg: #422006;
+    --color-lost: #fbbf24;
+    --color-found-bg: #064e3b;
+    --color-found: #34d399;
+
+    --color-success-bg: #052e16;
+    --color-success: #4ade80;
+    --color-warning-bg: #422006;
+    --color-warning: #facc15;
+    --color-danger-bg: #450a0a;
+    --color-danger: #f87171;
+    --color-info-bg: #172554;
+    --color-info: #60a5fa;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.6);
+  }
+}

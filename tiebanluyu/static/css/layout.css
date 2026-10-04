@@ -1,0 +1,269 @@
+/* ==========================================================================
+   布局：容器、页头、页脚、主区域、栅格
+   ========================================================================== */
+
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+}
+
+/* ---------------------------------------------------------------- 页头 */
+
+.site-header {
+  position: sticky; /* 滚动时保持可见，随时能搜索和切换分类 */
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--header-height);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: var(--color-primary-light);
+  border-radius: var(--radius);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand-text strong {
+  font-size: var(--text-md);
+  letter-spacing: 0.2px;
+}
+
+.brand-text small {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.nav-item {
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-soft);
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+
+.nav-item:hover {
+  background: var(--color-surface-soft);
+  color: var(--color-text);
+}
+
+.nav-item.is-active {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* margin-left:auto 把右侧操作区推到最右。
+   用 order 控制移动端顺序（见下方媒体查询），而不是靠 DOM 顺序，
+   这样桌面端和移动端能用同一份 HTML 得到不同排列。 */
+.header-actions {
+  order: -2;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.nav-toggle {
+  order: -1;
+  display: none; /* 默认隐藏，只在移动端且确实有菜单项时才显示 */
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 38px;
+  height: 38px;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.nav-toggle span {
+  display: block;
+  height: 2px;
+  background: var(--color-text-soft);
+  border-radius: 2px;
+}
+
+/* ---------------------------------------------------------------- 主区域 */
+
+.app-main {
+  flex: 1;
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-7);
+}
+
+.page-head {
+  margin-bottom: var(--space-5);
+}
+
+.page-title {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+.page-desc {
+  margin-top: var(--space-1);
+  color: var(--color-text-soft);
+  font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------------- 栅格 */
+
+.grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.grid-cards {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* 表单两列布局 */
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 720px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .form-grid .span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------------------------------------------------------------- 页脚 */
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: var(--space-5) 0;
+}
+
+.footer-inner {
+  text-align: center;
+}
+
+.footer-main {
+  font-size: var(--text-sm);
+  color: var(--color-text-soft);
+}
+
+.footer-main a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.footer-main a:hover {
+  text-decoration: underline;
+}
+
+.footer-sub {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* ---------------------------------------------------------------- 响应式 */
+
+@media (max-width: 820px) {
+  .brand-text small {
+    display: none;
+  }
+
+  /* 移动端顺序：品牌 → 右侧操作 → 汉堡按钮 */
+  .brand {
+    order: -4;
+  }
+
+  .header-actions {
+    order: -3;
+  }
+
+  /* 汉堡按钮只在「登录后」出现。
+     原因：未登录时导航区里一个可见项都没有（"我的发布"是隐藏的），
+     此时再显示汉堡按钮会变成一个点开什么都没有的死按钮。
+     登录后导航区有"我的发布"，汉堡才有意义。 */
+  body.is-logged-in .nav-toggle {
+    display: flex;
+  }
+
+  .main-nav {
+    position: absolute;
+    top: var(--header-height);
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+    /* 默认隐藏。这样在 JS 还没跑完、body 上还没有 is-logged-in 的那一瞬间，
+       不会先闪现出"我的发布"再消失（那种闪烁比晚一点出现更糟）。 */
+    display: none;
+  }
+
+  /* 只有点了汉堡按钮才展开 */
+  body.is-logged-in .main-nav.is-open {
+    display: flex;
+  }
+
+  .nav-item {
+    padding: 11px 14px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+@media (max-width: 520px) {
+  .brand-text strong {
+    font-size: var(--text-sm);
+  }
+
+  .page-title {
+    font-size: var(--text-lg);
+  }
+}

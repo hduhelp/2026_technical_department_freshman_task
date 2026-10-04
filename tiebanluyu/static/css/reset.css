@@ -1,0 +1,116 @@
+/* ==========================================================================
+   基础重置
+   目的：抹平不同浏览器的默认样式差异，让布局行为可预测。
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box; /* 让 padding 和 border 算进宽度，布局才不会溢出 */
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--text-base);
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure,
+blockquote {
+  margin: 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* 表单元素继承主题背景色，否则深色模式下会变成刺眼的白底 */
+input,
+select,
+textarea {
+  background: var(--color-surface);
+}
+
+/* 键盘无障碍：只在用 Tab 导航时显示焦点圈，鼠标点击时不显示 */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   【重要修复】让 hidden 属性真正生效
+   --------------------------------------------------------------------------
+   踩坑记录：
+   HTML 的 hidden 属性靠浏览器默认样式 `[hidden] { display: none }` 生效，
+   而**属性选择器的优先级比类选择器低**。
+
+   所以只要组件自己写了 display，hidden 就会被覆盖掉。本项目就踩到了：
+     .modal-backdrop { display: grid }  → 确认弹窗从一打开页面就盖满屏幕，
+                                          而且点取消/确定都没反应（它根本不该出现）
+     .nav-item       { display: flex }  → 未登录时"我的发布"依然可见
+
+   这里用 !important 是恰当的：这是全局基础规则，需要能压过任何组件的
+   display 声明。否则每加一个带 display 的组件，都要记得再写一遍
+   `.某组件[hidden] { display: none }`，很容易漏。
+   ========================================================================== */
+[hidden] {
+  display: none !important;
+}
+
+/* 尊重用户的"减少动画"系统设置 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
