@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>失物发布</title>
+    <style>
+        *{box-sizing: border-box;}
+        body {margin:0;font-family:"Microsoft YaHei", "微软雅黑", sans-serif;text-align: center;padding: 0;background: #f5f5f5;}
+        div {margin-bottom: 10px;}
+        #inputImage{width:300px;height:300px;object-fit:contain;border-radius:20px;}
+    </style>
+</head>
+<body>
+    <main>
+        <h3>发布</h3>
+        <div>
+            <input id="type" placeholder="丢失或招领">
+        </div>
+        <div>
+            <input id="title" placeholder="物品类型">
+        </div>
+        <div>
+            <input id="place" placeholder="地点">
+        </div>
+        <div>
+            <input id="happened-at" placeholder="发现时间">
+        </div>
+        <div>
+            <input id="description" placeholder="描述">
+        </div>
+        <div>
+            <input id="contact-info" placeholder="联系方式">
+        </div>
+        <div>
+            <input type="file" id="image" accept="image/*">
+        </div>
+        <button onclick="post()">发布</button>
+        <pre id="out"></pre>
+    </main>
+    
+    <footer>
+        <button onclick="backToIndex()">返回主界面</button>
+        <button onclick="backToManage()">返回管理界面</button>
+    </footer>
+    
+
+    <script>
+        async function post() {
+            const token = localStorage.getItem("token");
+            const out = document.getElementById("out");
+            
+            if (!token) {
+                alert("请先登录");
+                window.location.href = "/static/login.html";
+                return; 
+            }
+            out.textContent = "发布中...";
+            try{
+                const filename = await uploadImage();
+                const res = await fetch("/items", {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + token,
+                    },
+                    body: JSON.stringify({
+                        type: document.getElementById("type").value,
+                        title: document.getElementById("title").value,
+                        place:document.getElementById("place").value,
+                        happened_at:document.getElementById("happened-at").value,
+                        description:document.getElementById("description").value,
+                        contact_info:document.getElementById("contact-info").value,
+                        image:filename,
+                    }),
+                });
+                const data = await res.json();
+
+                if (!res.ok) {                                     // ★ 失败也要说话
+                    out.textContent = "发布失败：" + (data.msg || res.status);
+                    return;
+                }
+                out.textContent = "发布成功 ✓\n" + JSON.stringify(data, null, 2);
+
+            } catch (e){
+                out.textContent = "请求失败：" + e.message;
+            }
+        }
+
+        async function uploadImage() {
+            const token = localStorage.getItem("token");
+            if (!token) {
+                alert("请先登录");
+                window.location.href = "/static/login.html";
+                return; 
+            }
+            const f = document.getElementById("image").files[0];
+            if (!f) return "";
+
+            const fd = new FormData();
+            fd.append("file", f);                     // ★ 字段名要和后端一致
+
+            const res = await fetch("/upload", {
+                method:"POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: fd,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.msg || res.status);
+            return data.data.filename;                // 拿文件名去发帖 ✓
+        }
+
+        function backToIndex(){
+            window.location.href = "/static/index.html";
+        }
+        function backToManage(){
+            window.location.href = "/static/manage.html";
+        }
+    </script>
+</body>
+</html>

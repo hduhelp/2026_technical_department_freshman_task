@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    
+    <meta charset="UTF-8">
+    <title>注册界面</title>
+    <style>
+        *{box-sizing: border-box;}
+        body {margin:auto,auto;font-family:"Microsoft YaHei", "微软雅黑", sans-serif;text-align: center;padding: 0;background: #f5f5f5;}
+        div {margin-bottom: 10px;}
+    </style>
+</head>
+<body>
+    <h3>注册</h3>
+    <div><input id="u" placeholder="用户名"></div>
+    <div><input id="p" placeholder="密码"></div>
+    <div><button onclick="reg()">注册</button></div>
+    <div><pre id="out"></pre></div>
+
+    <footer>
+        <div><button onclick="backToLogin()" style="margin-bottom: 5px;">返回登录</button></div>
+        <div><button onclick="back()">返回主菜单</button></div>
+    </footer>
+
+    <script>
+        async function reg() {
+            const res = await fetch("/register",{
+                method:"POST", //保证POST,默认为GET
+                headers: { "Content-Type": "application/json" }, //保证解析没问题
+                body:JSON.stringify({
+                    username:document.getElementById("u").value, //获取username
+                    password:document.getElementById("p").value,
+                }),
+            });
+            //document.getElementById("out").textContent = res.status + "\n" + JSON.stringify(await res.json(),null,2);
+            alert("注册成功，请前往登录");
+            window.location.href = "/static/login.html"
+        }
+        function back(){
+            window.location.href = "/static/index.html"
+        }
+        function backToLogin(){
+            window.location.href = "/static/login.html"
+        }
+    </script>
+</body>
+</html>
