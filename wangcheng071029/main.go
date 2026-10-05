@@ -254,6 +254,8 @@ func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
 		db.Save(&post)
 		c.JSON(http.StatusOK, post)
 	})
+	r.StaticFile("/", "./static/index.html")
+	r.Static("/static", "./static")
 
 	return r
 }
