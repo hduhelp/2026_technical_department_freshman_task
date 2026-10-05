@@ -3,32 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>校园失物招领</title>
-  <style>
-    body { font-family: "Microsoft YaHei", sans-serif; max-width: 760px;
-          margin: 0 auto; padding: 16px; background: #f5f5f5; color: #333; }
-    header { display: flex; justify-content: space-between; align-items: center; }
-    h1 { font-size: 20px; margin: 0; }
-    #auth { font-size: 14px; color: #666; }
-    .filters { margin: 16px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    input, select, button { padding: 6px 10px; font-size: 14px; border: 1px solid #ccc;
-                            border-radius: 6px; background: #fff; }
-    button { cursor: pointer; }
-    button:disabled { color: #aaa; cursor: not-allowed; }
-    a { color: #2b6cb0; text-decoration: none; font-size: 14px; }
-    ul { list-style: none; padding: 0; }
-    .card { background: #fff; border-radius: 10px; padding: 12px 14px;
-            margin-bottom: 10px; display: flex; justify-content: space-between;
-            align-items: center; gap: 12px; flex-wrap: wrap;}
-    .detail { width: 100%; background-color: #fff;padding: 5px 5px;} 
-    .title { font-size: 16px; cursor: pointer; }
-    .open:hover {background-color: #ddd;}
-    .meta { font-size: 12.5px; color: #888; margin-top: 6px; }
-    #pager { margin: 16px 0; font-size: 14px; }
-    #out { color: #c53030; font-size: 14px; white-space: pre-wrap; }
-
-    .small-image {width:60px;height:60px;object-fit:cover;border-radius:6px;}
-    .big-image {width:500px;height:500px;object-fit:contain;border-radius:20px;}
-  </style>
+  <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
@@ -48,6 +23,12 @@
     <option value="desc">最新在前</option>
     <option value="asc">最早在前</option>
   </select>
+  <select id="status">
+    <option value="">全部状态</option>
+    <option value="searching">寻找中</option>
+    <option value="found">已找到</option>
+    <option value="closed">已关闭</option>
+  </select>
   <button onclick="load(1)">搜索</button>
   <a href="/static/publish.html">+ 发布</a>
 </section>
@@ -63,6 +44,13 @@ let page = 1;
 
 // ★ 后端存的是英文，显示时换成中文（"存储用英文、显示用中文"）
 const STATUS_TEXT = { searching: "寻找中", found: "已找到", closed: "已结束" };
+
+// ★ 状态 → 徽章 class（用 st- 前缀，避免和"类型"徽章的 found 撞名）
+function statusClass(s) {
+  if (s === "searching") return "st-searching";
+  if (s === "found")     return "st-found";
+  return "st-closed";
+}
 
 /* ---------- 登录状态 ---------- */
 function renderAuth() { 
@@ -119,17 +107,35 @@ function renderList(items) {
 
     const left = document.createElement("div");
 
-    const title = document.createElement("div");
-    title.className = "title";
-    title.textContent = "[" + it.type + "] " + it.title;   // ★ 安全
-    //title.onclick = () => toggleDetail(detail,it.item_id);
+    // ★ 标题行：类型徽章 + 标题
+    const titleRow = document.createElement("div");
+    titleRow.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
 
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "badge " + (it.type === "招领" ? "found" : "lost");
+    typeBadge.textContent = it.type;                     // "丢失" / "招领"
+
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = it.title;                        // ★ 标题里不再拼 [类型]
+
+    titleRow.append(typeBadge, title);
+
+    // ★ meta 行：地点 · 状态徽章 · 时间
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = it.place + " · " +
-                       (STATUS_TEXT[it.status] || it.status) + " · " + it.created_at;
 
-    left.append(title, meta);
+    const statusBadge = document.createElement("span");
+    statusBadge.className = "badge " + statusClass(it.status);
+    statusBadge.textContent = STATUS_TEXT[it.status] || it.status;
+
+    meta.append(
+      document.createTextNode(it.place + " · "),
+      statusBadge,
+      document.createTextNode(" · " + it.created_at)
+    );
+
+    left.append(titleRow, meta);
 
     const btn = document.createElement("button");
     btn.className = "open";
@@ -182,6 +188,7 @@ async function load(p) {
   const qs = new URLSearchParams();            // ★ 自动做 URL 编码（中文关键词也安全）
   if ($("type").value)         qs.set("type", $("type").value);
   if ($("keyword").value.trim()) qs.set("keyword", $("keyword").value.trim());
+  if ($("status").value) qs.set("status",$("status").value);
   qs.set("order", $("order").value);
   qs.set("page", page);
   qs.set("size", SIZE);

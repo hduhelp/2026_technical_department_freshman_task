@@ -269,6 +269,7 @@ func main() {
 		// ① 读参数
 		typeQ := c.Query("type")
 		keyword := c.Query("keyword")
+		statusQ := c.Query("status")
 
 		// ② 排序（白名单）
 		orderSQL := "DESC"
@@ -297,6 +298,10 @@ func main() {
 		if keyword != "" {
 			where = append(where, "(title LIKE ? OR description LIKE ? OR item_id LIKE ?)")
 			args = append(args, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+		}
+		if statusQ != "" {
+			where = append(where, "status LIKE ?")
+			args = append(args, statusQ)
 		}
 		whereSQL := ""
 		if len(where) > 0 {
@@ -390,6 +395,7 @@ func main() {
 		// ① 读参数
 		typeQ := c.Query("type")
 		keyword := c.Query("keyword")
+		statusQ := c.Query("status")
 
 		// ② 排序（白名单）
 		orderSQL := "DESC"
@@ -421,6 +427,10 @@ func main() {
 		if keyword != "" {
 			where = append(where, "(title LIKE ? OR description LIKE ?)")
 			args = append(args, "%"+keyword+"%", "%"+keyword+"%")
+		}
+		if statusQ != "" {
+			where = append(where, "status LIKE ?")
+			args = append(args, statusQ)
 		}
 		whereSQL := ""
 		if len(where) > 0 {

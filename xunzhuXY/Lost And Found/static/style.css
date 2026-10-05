@@ -1,0 +1,362 @@
+/* ===== 失物招领 · 暖调简约样式 v1 =====
+   设计原则：大面积中性暖色 + 小面积颜色（按钮/徽章）
+   现场演示友好：浅底、高对比、字号 15px
+   ===================================== */
+
+:root {
+  /* 背景：暖白（比纯白柔，带一点米） */
+  --bg:         #faf7f2;
+  --card:       #ffffff;
+
+  /* 文字：暖黑（不用纯黑、不用冷蓝黑） */
+  --text:       #2e2723;
+  --text-2:     #7a6d63;   /* 次要：描述、时间 */
+  --line:       #ece4da;   /* 分隔线：暖灰 */
+
+  /* 主色：赤陶橙（暖，但不刺眼） */
+  --brand:      #c9663d;
+  --brand-dark: #b0552f;   /* hover */
+  --brand-soft: #fdf1e9;   /* 浅底：选中态、淡背景 */
+
+  /* 状态色 */
+  --lost:       #b4482f;   /* 丢失：红棕（比主色深 → 不会和主色混） */
+  --lost-soft:  #fbeee9;
+  --found:      #2f8f5b;   /* 招领：墨绿 */
+  --found-soft: #eaf6ee;
+  --ok:         #3f8f52;   /* found 状态 */
+  --closed:     #a99a8d;   /* 结束：暖灰 */
+
+  /* 尺寸 */
+  --r:    10px;
+  --r-sm: 6px;
+  --sp:   8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 780px;            /* ★ 收拢：别铺满整个窗口 */
+  padding: 28px 24px 56px;     /* ★ 两边留空（左右 24px） */
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* 页面容器：窄一点，别铺满屏 */
+.wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+
+/* ---------- 顶部栏 ---------- */
+.topbar {
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  position: sticky; top: 0; z-index: 10;
+}
+.topbar .logo { font-weight: 700; color: var(--brand); margin-right: auto; }
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(120, 80, 50, .06);   /* 暖阴影，不是纯黑 */
+}
+
+/* ---------- 列表项 ---------- */
+.item {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px;
+  margin-bottom: 10px;
+  transition: box-shadow .15s, transform .15s;
+}
+.item:hover { box-shadow: 0 2px 10px rgba(120, 80, 50, .10); transform: translateY(-1px); }
+.item h3 { margin: 0 0 4px; font-size: 16px; }
+.item .meta { color: var(--text-2); font-size: 13px; }
+.item img.thumb {
+  width: 64px; height: 64px; object-fit: cover;
+  border-radius: var(--r-sm); flex-shrink: 0;
+}
+
+/* ---------- 徽章 ---------- */
+.badge {
+  display: inline-block; font-size: 12px; padding: 2px 8px;
+  border-radius: 999px; line-height: 1.6;
+  vertical-align: middle; white-space: nowrap;
+}
+/* 类型徽章 */
+.badge.lost      { background: var(--lost-soft);  color: var(--lost); }
+.badge.found     { background: var(--found-soft); color: var(--found); }
+
+/* ★ 状态徽章（用 st- 前缀，避免和"类型"撞名字）*/
+.badge.st-searching { background: var(--brand-soft); color: var(--brand); }
+.badge.st-found     { background: var(--found-soft); color: var(--ok); }
+.badge.st-closed    { background: #f2ede8;           color: var(--closed); }
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-block; border: 0; cursor: pointer;
+  background: var(--brand); color: #fff;
+  padding: 9px 16px; border-radius: var(--r-sm);
+  font-size: 14px; font-family: inherit; text-decoration: none;
+}
+.btn:hover { background: var(--brand-dark); }
+.btn.ghost { background: transparent; color: var(--brand); border: 1px solid var(--line); }
+.btn.ghost:hover { background: var(--brand-soft); }
+.btn.danger { background: var(--lost); }
+.btn.danger:hover { background: #9d3d26; }
+
+/* ---------- 表单 ---------- */
+input[type=text], input[type=password], input[type=date],
+input[type=file], select, textarea, .input {
+  width: 100%; padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: #fff; color: var(--text);
+  font-family: inherit; font-size: 14px;
+  outline: none;
+}
+input:focus, select:focus, textarea:focus, .input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-soft);   /* 暖光晕 */
+}
+label { display: block; font-size: 13px; color: var(--text-2); margin: 12px 0 4px; }
+
+/* ---------- 提示 / 输出 ---------- */
+#out { font-size: 14px; color: var(--text-2); white-space: pre-wrap; margin-top: 12px; }
+
+/* ---------- 小工具 ---------- */
+.muted { color: var(--text-2); font-size: 13px; }
+.row   { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mt    { margin-top: 16px; }
+.center { text-align: center; }
+.link  { color: var(--brand); text-decoration: none; font-size: 14px; }
+.link:hover { text-decoration: underline; }
+
+/* =====================================================
+   兼容旧 class 名（index.html 的 JS 里正在用的）
+   ★ 这样 JS 一行都不用改
+   ===================================================== */
+
+/* 列表项（li.card） */
+li.card {
+  list-style: none;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(120, 80, 50, .06);
+  transition: box-shadow .15s, transform .15s;
+}
+li.card:hover { box-shadow: 0 2px 10px rgba(120, 80, 50, .10); transform: translateY(-1px); }
+
+.title { font-size: 16px; font-weight: 600; cursor: pointer; }
+.meta  { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+
+/* 展开/收起按钮 */
+.open {
+  border: 1px solid var(--line);
+  background: var(--brand-soft);
+  color: var(--brand);
+  padding: 6px 14px; border-radius: var(--r-sm);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  flex-shrink: 0;
+}
+.open:hover { background: #f9e3d3; }
+
+/* 详情区（展开后那一块） */
+.detail {
+  width: 100%;
+  padding: 10px 2px 2px;
+  border-top: 1px dashed var(--line);
+  font-size: 14px;
+}
+.detail p { margin: 4px 0; }
+.detail p:not(:last-child) { border-bottom: 1px solid #f6f1ea; padding-bottom: 4px; }
+
+/* 图片 */
+.small-image {
+  width: 64px; height: 64px; object-fit: cover;
+  border-radius: var(--r-sm); flex-shrink: 0;
+}
+.big-image {
+  max-width: 100%; height: auto; max-height: 380px;   /* ★ 原来写死 500x500，投影仪会溢出 */
+  object-fit: contain;
+  border-radius: var(--r);
+  margin-top: 10px;
+}
+
+/* 筛选栏 */
+.filters {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  margin: 16px 0;
+}
+
+/* ★★ 关键是：筛选栏里的控件【不要 width:100%】
+   （表单页需要 100%，但这里会把 select 撑满 ✓）*/
+.filters select,
+.filters input,
+.filters button,
+.filters a {
+  width: auto;
+  flex: 0 0 auto;
+  height: 40px;               /* ★ 统一高度 → 一行里一定对齐（原来约 35px） */
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* 只有搜索框吃掉剩余宽度 */
+.filters input {
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.filters select { padding-left: 10px; padding-right: 10px; }
+
+/* ★ 按钮/链接：文字居中 + 左右内边距 */
+.filters button,
+.filters a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+/* ★ 搜索按钮：淡色底（轻），hover 时亮成实心 */
+.filters button {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, color .15s, transform .05s;
+}
+.filters button:hover {
+  background: var(--brand);
+  color: #fff;
+}
+.filters button:active { transform: translateY(1px); }
+
+/* ★ "+ 发布"：次一级（白底 + 主色文字 + 描边）—— 不跟搜索抢 */
+.filters a {
+  color: var(--brand);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  text-decoration: none;
+  transition: border-color .15s, background .15s;
+}
+.filters a:hover { border-color: var(--brand); background: var(--brand-soft); }
+
+/* 分页条 */
+#pager { margin: 16px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+#pager button {
+  border: 1px solid var(--line); background: #fff; color: var(--text);
+  padding: 6px 12px; border-radius: var(--r-sm); font-size: 13px;
+  font-family: inherit; cursor: pointer;
+}
+#pager button:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+#pager button:disabled { color: #c9bfb5; cursor: not-allowed; }
+
+/* 头部 */
+header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+header h1 { font-size: 20px; margin: 0; color: var(--brand); }
+#auth { font-size: 14px; color: var(--text-2); display: flex; gap: 8px; align-items: center; }
+#auth button {
+  border: 1px solid var(--line); background: #fff; color: var(--text);
+  padding: 5px 12px; border-radius: var(--r-sm); font-size: 13px;
+  font-family: inherit; cursor: pointer;
+}
+#auth button:hover { border-color: var(--brand); color: var(--brand); }
+#auth a { color: var(--brand); text-decoration: none; }
+
+/* 列表容器 */
+ul#list, ul { list-style: none; padding: 0; margin: 0; }
+
+/* 空状态 */
+ul#list > li:only-child { text-align: center; color: var(--text-2); padding: 40px 0; }
+
+/* 输出区（错误信息） */
+#out { color: var(--brand); font-size: 14px; white-space: pre-wrap; }
+
+/* ---------- 登录/注册/表单页 ---------- */
+.center-page {
+  max-width: 380px; margin: 0 auto; padding: 60px 20px;
+}
+.center-page h3 {
+  font-size: 22px; margin: 0 0 24px; color: var(--brand); text-align: center;
+}
+.center-page footer { margin-top: 24px; font-size: 14px; text-align: center; }
+.center-page footer a { color: var(--brand); text-decoration: none; }
+.center-page .btn { width: 100%; padding: 11px 16px; font-size: 15px; }
+
+/* ---------- 表单页（发布 / 修改）：比登录页宽一点 ---------- */
+.form-page {
+  max-width: 560px; margin: 0 auto; padding: 40px 20px 64px;
+}
+.form-page h3 {
+  font-size: 22px; margin: 0 0 24px; color: var(--brand); text-align: center;
+}
+.form-page label { margin-top: 14px; }
+.form-page .btn { width: 100%; padding: 11px 16px; font-size: 15px; }
+.form-page footer { margin-top: 18px; display: flex; gap: 10px; }
+.form-page footer .btn { flex: 1; }
+.form-page select { width: 100%; }          /* ★ 覆盖 edit.html 里的内联 width:100px */
+
+/* ★ 图片框：一个虚线框，有图显示图、没图显示"暂无图片" */
+.img-box {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 140px; padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  background: #fdfcfa;
+}
+.img-box img {
+  max-width: 100%; max-height: 240px;
+  border-radius: var(--r-sm);
+  margin: 0;                 /* ★ 覆盖 .form-page img 的 margin:auto */
+}
+.img-box .muted { font-size: 13px; }
+.form-page img {
+  display: block; max-width: 100%; max-height: 260px;
+  margin: 10px auto; border-radius: var(--r); border: 1px solid var(--line);
+}
+.form-page #out { text-align: center; }
+
+/* ---------- 列表里的操作按钮（manage.html） ---------- */
+li.card .open,
+li.card .edit,
+li.card .del {
+  border: 1px solid var(--line); background: #fff; color: var(--text);
+  padding: 6px 14px; border-radius: var(--r-sm);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+  flex-shrink: 0;
+}
+li.card .open:hover,
+li.card .edit:hover { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+li.card .del:hover  { border-color: var(--lost);  color: var(--lost);  background: var(--lost-soft); }
+
+/* 管理页头部那几个按钮 */
+.back, .getUser {
+  border: 1px solid var(--line); background: #fff; color: var(--text);
+  padding: 5px 12px; border-radius: var(--r-sm);
+  font-size: 13px; font-family: inherit; cursor: pointer;
+}
+.back:hover, .getUser:hover { border-color: var(--brand); color: var(--brand); }

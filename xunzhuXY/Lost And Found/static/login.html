@@ -2,24 +2,31 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>登录界面</title>
-    <style>
-        *{box-sizing: border-box;}
-        body {margin:0;font-family:"Microsoft YaHei", "微软雅黑", sans-serif;text-align: center;padding: 0;background: #f5f5f5;}
-        div {margin-bottom: 10px;}
-    </style>
+    <title>登录 · 校园失物招领</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <h3>登录</h3>
-    <div><input id="u" placeholder="用户名"></div>
-    <div><input id="p" placeholder="密码"></div>
-    <div><button onclick="login()">登录</button></div>
-    <div><pre id="out"></pre></div>
+    <div class="center-page">
+        <h3>登录</h3>
 
-    <footer>
-        <div><a href="/static/reg.html" style="color: #2b6cb0; text-decoration: none; font-size: 14px;">没有账号，在这里注册</a></div>
-        <div><button onclick="back()">返回主菜单</button></div>
-    </footer>
+        <div>
+            <input id="u" class="input" placeholder="用户名">
+        </div>
+        <div>
+            <input id="p" class="input" type="password" placeholder="密码">
+        </div>
+        <div style="margin-top:16px;">
+            <button class="btn" onclick="login()">登录</button>
+        </div>
+        <div><pre id="out"></pre></div>
+
+        <footer>
+            <div><a class="link" href="/static/reg.html">没有账号，在这里注册</a></div>
+            <div style="margin-top:10px;">
+                <a class="link" href="/static/index.html">← 返回主菜单</a>
+            </div>
+        </footer>
+    </div>
 
     <script>
         async function login() {
@@ -49,7 +56,6 @@
                 out.textContent = "请求失败：" + e.message;
             }
         }
-        //document.getElementById("out").textContent = res.status + "\n" + JSON.stringify(await res.json(),null,2);
         function back(){
             window.location.href = "/static/index.html"
         }

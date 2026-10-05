@@ -1,58 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>修改界面</title>
-    <style>
-        *{box-sizing: border-box;}
-        body {margin:0;font-family:"Microsoft YaHei", "微软雅黑", sans-serif;text-align: center;padding: 0;background: #f5f5f5;}
-        div {margin-bottom: 10px;}
-        #nowImage{width:300px;height:300px;object-fit:contain;border-radius:20px;}
-    </style>
+    <title>修改帖子 · 校园失物招领</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <main>
-        <h3>修改界面</h3>
-        <div>
-            <pre id="listout"></pre>
-            <ul id="list" style="list-style: none;"></ul>
-        </div>
-        
-        <div>
-            <p id="item-id"></p>
-        </div>
-        <div>
-            <input id="type" placeholder="丢失或招领">
-        </div>
-        <div>
-            <input id="title" placeholder="物品类型">
-        </div>
-        <div>
-            <input id="place" placeholder="地点">
-        </div>
-        <div>
-            <input id="happened-at" placeholder="发现时间">
-        </div>
-        <div>
-            <input id="description" placeholder="描述">
-        </div>
-        <div>
-            <input id="contact-info" placeholder="联系方式">
-        </div>
-        <div>
-            <select id="sta" style="width: 100px;height: 20px;">
-                <option value="searching">寻找中</option>
-                <option value="found">找到了</option>
-                <option value="closed">关闭了</option>
-            </select>
-        </div>
-        <div><p>当前图片为:</p></div>
-        <div><img id="nowImage"></div>
-        <div><input type="file" id="image" accept="image/*"></div>
-        <div><button onclick="edit()">修改</button></div>
-        <div><button onclick="back()">返回管理界面</button></div>
-        <pre id="out"></pre>
-    </main>
+  <div class="form-page">
+    <h3>修改帖子</h3>
+
+    <p id="item-id" class="muted"></p>
+
+    <div><input id="type" class="input" placeholder="丢失或招领"></div>
+    <div><input id="title" class="input" placeholder="物品类型"></div>
+    <div><input id="place" class="input" placeholder="地点"></div>
+    <div><input id="happened-at" class="input" placeholder="发现时间"></div>
+    <div><input id="description" class="input" placeholder="描述"></div>
+    <div><input id="contact-info" class="input" placeholder="联系方式"></div>
+    <div>
+        <select id="sta">
+            <option value="searching">寻找中</option>
+            <option value="found">找到了</option>
+            <option value="closed">关闭了</option>
+        </select>
+    </div>
+
+    <label id="imgLabel">当前图片</label>
+    <div class="img-box">
+        <img id="nowImage" alt="图片" style="display:none;">
+        <span id="noImage" class="muted">暂无图片</span>
+    </div>
+
+    <div style="margin-top:12px;">
+        <input type="file" id="image" accept="image/*">
+    </div>
+    <button class="btn" onclick="edit()">保存修改</button>
+    <pre id="out"></pre>
+
+    <footer>
+        <button class="btn ghost" onclick="back()">返回管理界面</button>
+    </footer>
+  </div>
 
     <script>
         const sel = document.getElementById("sta");
@@ -60,27 +48,70 @@
         const out = document.getElementById("out");
         const token = localStorage.getItem("token");
         const id = itemId
-        document.getElementById("item-id").textContent = "当前修改的帖子ID为：" + itemId;
+        document.getElementById("item-id").textContent = "当前修改的帖子 ID：" + itemId;
+
+        /* ★ 图片框：一个框同时充当"当前图片"和"新图预览"
+           —— 语义清楚：框里就是【保存后会生效的那张图】 */
+        let originalSrc = "";      // 数据库里已有的图（取消选择时恢复用）
+        let previewUrl  = "";      // createObjectURL 造的临时地址（要释放）
+
+        function showImg(src) {
+            const img = document.getElementById("nowImage");
+            const no  = document.getElementById("noImage");
+            if (src) {
+                img.src = src;
+                img.style.display = "block";
+                no.style.display = "none";
+            } else {
+                img.style.display = "none";
+                img.removeAttribute("src");     // ★ 清掉 src，避免破图
+                no.style.display = "block";
+            }
+        }
+
         Detail(id);
-        
+
+        /* ★★ 选中新图 → 直接替换同一个框（不另开一个预览图，免得用户搞不清哪张算数）*/
+        document.getElementById("image").addEventListener("change", function () {
+            const f = this.files[0];
+            const label = document.getElementById("imgLabel");
+
+            if (!f) {                                   // 点了"取消"
+                showImg(originalSrc);
+                label.textContent = "当前图片";
+                return;
+            }
+            if (f.size > 5 * 1024 * 1024) {             // ★ 后端限制 5MB，提前拦
+                alert("图片不能超过 5MB");
+                this.value = "";
+                showImg(originalSrc);
+                label.textContent = "当前图片";
+                return;
+            }
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(f);
+            showImg(previewUrl);
+            label.textContent = "新图片（保存后生效）";   // ★ 明确告诉用户
+        });
+
         function back(){
             window.location.href = "/static/manage.html";
         }
 
         //编辑
         async function edit(){
-            
+
             if (!token) {
                 alert("请先登录");
                 window.location.href = "/static/login.html";
-                return; 
+                return;
             }
             out.textContent = "修改中...";
             try{
                 const filename = await uploadImage();
                 const res = await fetch(`/items/${id}`, {
                     method: "PUT",
-                    headers: { 
+                    headers: {
                         "Content-Type": "application/json",
                         "Authorization": "Bearer " + token,
                     },
@@ -114,18 +145,16 @@
             try{
                 res = await fetch ("/items/" + id);
                 resJson = await res.json();
-                //console.log(res);
-                
+
                 if(!res.ok){
-                    out.textContent = "加载失败：" + (data.msg || res.status); 
-                    return; 
+                    out.textContent = "加载失败：" + (resJson.msg || res.status);
+                    return;
                 }
             }catch(e){
                 out.textContent = "请求失败：" + e.message;
                 return;
             }
             const data = resJson.data;
-            //console.log(data);
             document.getElementById("type").value = data.type;
             document.getElementById("title").value = data.title;
             document.getElementById("place").value = data.place;
@@ -133,11 +162,10 @@
             document.getElementById("description").value = data.description;
             document.getElementById("contact-info").value = data.contact_info;
             document.getElementById("sta").value = data.status;
-            
+
             //图片
-            if(data.image){
-                document.getElementById("nowImage").src = "/uploads/" + data.image
-            }
+            originalSrc = data.image ? "/uploads/" + data.image : "";
+            showImg(originalSrc);
         }
 
         async function uploadImage() {
@@ -145,7 +173,7 @@
             if (!token) {
                 alert("请先登录");
                 window.location.href = "/static/login.html";
-                return; 
+                return;
             }
             const f = document.getElementById("image").files[0];
             if (!f) return "";
@@ -163,8 +191,6 @@
             return data.data.filename;                // 拿文件名去发帖 ✓
         }
 
-        
-        //console.log(sel.value);
         localStorage.removeItem("itemId");
     </script>
 </body>
