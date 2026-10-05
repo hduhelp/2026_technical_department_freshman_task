@@ -1,59 +1,59 @@
-# HDU Lost and Found Design
+# 杭州电子科技大学失物招领系统设计
 
-## Goal
+## 目标
 
-Build a locally demonstrable Hangzhou Dianzi University lost-and-found site that lets registered students publish, find, manage, and contact posters about lost or found items.
+制作一个可在本机演示的杭州电子科技大学失物招领网站。学生可以注册、发布失物或招领信息、查找信息、管理自己发布的内容，并通过公开联系方式联系发布者。
 
-## Scope
+## 范围
 
-- Register, log in, get the current user, and log out.
-- Create, read, update, and delete a user's own lost/found posts.
-- Browse other users' posts with keyword search, filtering, sorting, and pagination.
-- Move a post through `searching`, `found`, and `closed`; only its author can change it.
-- Show a public contact method on each post so users can contact the owner or finder.
+- 用户注册、登录、获取当前用户信息与退出登录。
+- 创建、查看、修改和删除本人发布的失物或招领信息。
+- 浏览他人信息，按关键词检索、筛选、排序与分页。
+- 信息状态按“寻找中 → 已找到 → 已结束”流转，且只能由发布者变更。
+- 每条信息展示发布者填写的公开联系方式，供失主与拾主联系。
 
-## Deliberate Limits
+## 明确不做的内容
 
-- No real campus identity verification, image upload, chat, email/SMS delivery, admin dashboard, or recommendation algorithm.
-- Logout removes the browser token. JWTs remain valid until their short expiry, which is acceptable for this interview demo.
+- 不做校园身份认证、图片上传、站内私信、邮件或短信通知、管理员后台和推荐算法。
+- 退出登录时删除浏览器保存的令牌；已签发的 JWT 在短期过期前仍有效，这是本次面试演示可接受的简化。
 
-## Architecture
+## 架构
 
-One Go process serves both the JSON API and the static browser app. Gin routes requests; middleware validates the JWT and places the current user ID in the request context. GORM uses SQLite (`lost_found.db`) to persist users and posts without an external database service.
+一个 Go 进程同时提供 JSON 接口和静态网页。Gin 负责路由；中间件校验 JWT，并把当前用户 ID 写入请求上下文。GORM 使用 SQLite（`lost_found.db`）持久化用户和信息，不需要额外安装数据库服务。
 
-The frontend is a small single-page interface using browser `fetch`. It stores the JWT in `localStorage`, sends it as a Bearer token for protected calls, and renders the response data without a frontend framework.
+前端是一个原生 HTML、CSS、JavaScript 页面，使用浏览器 `fetch` 调用接口。它将 JWT 保存到 `localStorage`，在受保护请求中通过 Bearer Token 发送，并根据接口响应渲染页面。
 
-## Data Model
+## 数据模型
 
-`User`: ID, username (unique), password hash, created time.
+`用户`：ID、唯一用户名、密码哈希、创建时间。
 
-`Post`: ID, author ID, type (`lost` or `found`), item name, location, happened-at time, description, contact, status (`searching`, `found`, `closed`), created time, updated time.
+`信息`：ID、发布者 ID、类型（失物或招领）、物品名称、地点、发生时间、描述、联系方式、状态（寻找中、已找到、已结束）、创建时间、更新时间。
 
-## API
+## 接口
 
-| Method | Path | Purpose |
+| 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| POST | `/api/auth/register` | Create an account. |
-| POST | `/api/auth/login` | Verify credentials and return a JWT. |
-| GET | `/api/auth/me` | Return the JWT's user. |
-| POST | `/api/auth/logout` | Acknowledge logout; client removes JWT. |
-| GET | `/api/posts` | Public list; supports `q`, `type`, `status`, `page`, `page_size`. |
-| POST | `/api/posts` | Create a post as the logged-in user. |
-| GET | `/api/posts/:id` | Read one public post. |
-| PUT | `/api/posts/:id` | Update a post owned by the caller. |
-| DELETE | `/api/posts/:id` | Delete a post owned by the caller. |
-| PATCH | `/api/posts/:id/status` | Advance an owned post's status. |
+| POST | `/api/auth/register` | 注册账号。 |
+| POST | `/api/auth/login` | 校验账号密码并返回 JWT。 |
+| GET | `/api/auth/me` | 返回 JWT 对应的当前用户。 |
+| POST | `/api/auth/logout` | 确认退出；前端删除 JWT。 |
+| GET | `/api/posts` | 公开信息列表；支持 `q`、`type`、`status`、`page`、`page_size`。 |
+| POST | `/api/posts` | 以当前登录用户身份发布信息。 |
+| GET | `/api/posts/:id` | 查看一条公开信息。 |
+| PUT | `/api/posts/:id` | 修改当前用户自己的信息。 |
+| DELETE | `/api/posts/:id` | 删除当前用户自己的信息。 |
+| PATCH | `/api/posts/:id/status` | 推进当前用户自己的信息状态。 |
 
-The list query uses `WHERE` for type/status, `LIKE` for keyword matching, `ORDER BY created_at DESC` for newest-first results, and `LIMIT` plus `OFFSET` for paging.
+列表查询中，`WHERE` 用于类型和状态筛选，`LIKE` 用于关键词检索，`ORDER BY created_at DESC` 保证最新发布的信息靠前，`LIMIT` 和 `OFFSET` 用于分页。
 
-## Browser Flow
+## 页面流程
 
-An anonymous visitor can browse, search, and open post details. Registration or login reveals the publishing form and “My posts.” A post card exposes edit/delete/status controls only when `author_id` equals the current user ID. Details always show the poster's supplied contact method.
+未登录访客可以浏览、搜索和查看信息详情。注册或登录后，页面展示发布表单和“我的发布”。仅当信息的 `author_id` 等于当前用户 ID 时，信息卡片才显示编辑、删除和状态变更按钮。详情页始终显示发布者填写的联系方式。
 
-## Validation and Security
+## 校验与安全
 
-Usernames and passwords must be non-empty. Post fields required by the demo are type, item name, location, happened-at time, description, and contact. Passwords are bcrypt hashes. Protected routes reject missing or invalid JWTs; ownership checks reject attempts to modify someone else's post. Status can only advance one step: `searching` → `found` → `closed`.
+用户名和密码不能为空。演示所需的信息字段包括类型、物品名称、地点、发生时间、描述和联系方式。密码使用 bcrypt 哈希保存。受保护接口拒绝缺失或无效的 JWT；归属校验拒绝用户修改他人信息。状态每次只能前进一步：寻找中 → 已找到 → 已结束。
 
-## Verification
+## 验证
 
-Go integration tests will exercise registration/login/current-user, protected ownership behavior, status transitions, and filtered/paginated post queries using a temporary SQLite database. A final manual smoke test will run the server and call the public page and API.
+Go 集成测试将覆盖注册、登录、获取当前用户、本人权限、状态流转、带筛选和分页的信息查询，并使用临时 SQLite 数据库。最终会启动服务，验证网页和接口均可访问。
