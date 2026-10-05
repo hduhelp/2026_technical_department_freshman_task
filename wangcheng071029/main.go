@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,13 +21,48 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type Post struct {
+	ID          uint      `json:"id"`
+	AuthorID    uint      `json:"author_id" gorm:"index"`
+	Author      User      `json:"author"`
+	Type        string    `json:"type"`
+	ItemName    string    `json:"item_name"`
+	Location    string    `json:"location"`
+	HappenedAt  time.Time `json:"happened_at"`
+	Description string    `json:"description"`
+	Contact     string    `json:"contact"`
+	Status      string    `json:"status" gorm:"index"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
+type postInput struct {
+	Type        string `json:"type"`
+	ItemName    string `json:"item_name"`
+	Location    string `json:"location"`
+	HappenedAt  string `json:"happened_at"`
+	Description string `json:"description"`
+	Contact     string `json:"contact"`
+}
+
+func parsePost(input postInput) (Post, bool) {
+	if (input.Type != "lost" && input.Type != "found") || strings.TrimSpace(input.ItemName) == "" || strings.TrimSpace(input.Location) == "" || strings.TrimSpace(input.Description) == "" || strings.TrimSpace(input.Contact) == "" {
+		return Post{}, false
+	}
+	happenedAt, err := time.Parse(time.RFC3339, input.HappenedAt)
+	if err != nil {
+		return Post{}, false
+	}
+	return Post{Type: input.Type, ItemName: strings.TrimSpace(input.ItemName), Location: strings.TrimSpace(input.Location), HappenedAt: happenedAt, Description: strings.TrimSpace(input.Description), Contact: strings.TrimSpace(input.Contact)}, true
+}
+
 func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
-	db.AutoMigrate(&User{})
+	db.AutoMigrate(&User{}, &Post{})
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 
@@ -106,6 +142,117 @@ func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
 	})
 	protected.POST("/logout", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "已退出登录"})
+	})
+
+	posts := r.Group("/api/posts")
+	posts.GET("", func(c *gin.Context) {
+		query := db.Preload("Author")
+		if value := c.Query("type"); value == "lost" || value == "found" {
+			query = query.Where("type = ?", value)
+		}
+		if value := c.Query("status"); value == "searching" || value == "found" || value == "closed" {
+			query = query.Where("status = ?", value)
+		}
+		if value := strings.TrimSpace(c.Query("q")); value != "" {
+			like := "%" + value + "%"
+			query = query.Where("item_name LIKE ? OR location LIKE ? OR description LIKE ?", like, like, like)
+		}
+		page, size := 1, 10
+		if value, err := strconv.Atoi(c.DefaultQuery("page", "1")); err == nil && value > 0 {
+			page = value
+		}
+		if value, err := strconv.Atoi(c.DefaultQuery("page_size", "10")); err == nil && value > 0 && value <= 50 {
+			size = value
+		}
+		var total int64
+		query.Model(&Post{}).Count(&total)
+		var results []Post
+		query.Order("created_at DESC").Limit(size).Offset((page - 1) * size).Find(&results)
+		c.JSON(http.StatusOK, gin.H{"items": results, "total": total, "page": page, "page_size": size})
+	})
+	posts.GET("/:id", func(c *gin.Context) {
+		var post Post
+		if err := db.Preload("Author").First(&post, c.Param("id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "信息不存在"})
+			return
+		}
+		c.JSON(http.StatusOK, post)
+	})
+
+	owned := posts.Group("", auth)
+	owned.POST("", func(c *gin.Context) {
+		var input postInput
+		post, valid := Post{}, c.ShouldBindJSON(&input) == nil
+		if valid {
+			post, valid = parsePost(input)
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "请完整填写有效的信息"})
+			return
+		}
+		post.AuthorID = c.GetUint("user_id")
+		post.Status = "searching"
+		db.Create(&post)
+		db.Preload("Author").First(&post, post.ID)
+		c.JSON(http.StatusCreated, post)
+	})
+	owned.PUT("/:id", func(c *gin.Context) {
+		var post Post
+		if err := db.First(&post, c.Param("id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "信息不存在"})
+			return
+		}
+		if post.AuthorID != c.GetUint("user_id") {
+			c.JSON(http.StatusForbidden, gin.H{"message": "只能修改自己的信息"})
+			return
+		}
+		var input postInput
+		updated, valid := Post{}, c.ShouldBindJSON(&input) == nil
+		if valid {
+			updated, valid = parsePost(input)
+		}
+		if !valid {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "请完整填写有效的信息"})
+			return
+		}
+		post.Type, post.ItemName, post.Location = updated.Type, updated.ItemName, updated.Location
+		post.HappenedAt, post.Description, post.Contact = updated.HappenedAt, updated.Description, updated.Contact
+		db.Save(&post)
+		c.JSON(http.StatusOK, post)
+	})
+	owned.DELETE("/:id", func(c *gin.Context) {
+		var post Post
+		if err := db.First(&post, c.Param("id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "信息不存在"})
+			return
+		}
+		if post.AuthorID != c.GetUint("user_id") {
+			c.JSON(http.StatusForbidden, gin.H{"message": "只能删除自己的信息"})
+			return
+		}
+		db.Delete(&post)
+		c.Status(http.StatusNoContent)
+	})
+	owned.PATCH("/:id/status", func(c *gin.Context) {
+		var post Post
+		if err := db.First(&post, c.Param("id")).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "信息不存在"})
+			return
+		}
+		if post.AuthorID != c.GetUint("user_id") {
+			c.JSON(http.StatusForbidden, gin.H{"message": "只能变更自己的信息状态"})
+			return
+		}
+		var input struct {
+			Status string `json:"status"`
+		}
+		if c.ShouldBindJSON(&input) != nil || !((post.Status == "searching" && input.Status == "found") || (post.Status == "found" && input.Status == "closed")) {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "状态只能按顺序变更"})
+			return
+		}
+		post.Status = input.Status
+		db.Save(&post)
+		c.JSON(http.StatusOK, post)
 	})
 
 	return r

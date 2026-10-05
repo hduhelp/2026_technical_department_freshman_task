@@ -97,3 +97,79 @@ func Test注册登录并获取当前用户(t *testing.T) {
 		t.Fatalf("当前用户 = %q，期望 xiaoming", meBody.Username)
 	}
 }
+
+func loginToken(t *testing.T, handler http.Handler, username string) string {
+	t.Helper()
+	request(t, handler, http.MethodPost, "/api/auth/register", map[string]string{
+		"username": username,
+		"password": "123456",
+	}, "")
+	login := request(t, handler, http.MethodPost, "/api/auth/login", map[string]string{
+		"username": username,
+		"password": "123456",
+	}, "")
+	if login.Code != http.StatusOK {
+		t.Fatalf("%s 登录失败：%d", username, login.Code)
+	}
+	var body struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(login.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	return body.Token
+}
+
+func Test信息创建查询权限和状态流转(t *testing.T) {
+	handler := newTestRouter(t)
+	ownerToken := loginToken(t, handler, "xiaoming")
+	otherToken := loginToken(t, handler, "xiaohong")
+
+	create := request(t, handler, http.MethodPost, "/api/posts", map[string]string{
+		"type":        "lost",
+		"item_name":   "校园卡",
+		"location":    "下沙校区图书馆",
+		"happened_at": "2026-09-26T14:30:00+08:00",
+		"description": "黑色卡套，里面有校园卡",
+		"contact":     "QQ：10001",
+	}, ownerToken)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("创建信息状态码 = %d，期望 %d", create.Code, http.StatusCreated)
+	}
+	var post struct {
+		ID uint `json:"id"`
+	}
+	if err := json.NewDecoder(create.Body).Decode(&post); err != nil {
+		t.Fatal(err)
+	}
+
+	list := request(t, handler, http.MethodGet, "/api/posts?q=校园卡&type=lost&status=searching&page=1&page_size=1", nil, "")
+	if list.Code != http.StatusOK || !bytes.Contains(list.Body.Bytes(), []byte("下沙校区图书馆")) {
+		t.Fatalf("筛选搜索失败：状态码 %d，响应 %s", list.Code, list.Body.String())
+	}
+
+	forbidden := request(t, handler, http.MethodPut, "/api/posts/1", map[string]string{
+		"item_name": "他人的校园卡",
+	}, otherToken)
+	if forbidden.Code != http.StatusForbidden {
+		t.Fatalf("他人修改状态码 = %d，期望 %d", forbidden.Code, http.StatusForbidden)
+	}
+
+	found := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "found"}, ownerToken)
+	if found.Code != http.StatusOK {
+		t.Fatalf("标记已找到状态码 = %d，期望 %d", found.Code, http.StatusOK)
+	}
+	closed := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "closed"}, ownerToken)
+	if closed.Code != http.StatusOK {
+		t.Fatalf("标记已结束状态码 = %d，期望 %d", closed.Code, http.StatusOK)
+	}
+	illegal := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "found"}, ownerToken)
+	if illegal.Code != http.StatusBadRequest {
+		t.Fatalf("已结束后变更状态码 = %d，期望 %d", illegal.Code, http.StatusBadRequest)
+	}
+
+	deleted := request(t, handler, http.MethodDelete, "/api/posts/1", nil, ownerToken)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("删除状态码 = %d，期望 %d", deleted.Code, http.StatusNoContent)
+	}
+}
