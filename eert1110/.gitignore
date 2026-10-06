@@ -1,0 +1,8 @@
+# 数据文件
+data.json
+*.json.tmp
+
+# 编译产物
+/lost-and-found
+/lost-and-found.exe
+*.exe
