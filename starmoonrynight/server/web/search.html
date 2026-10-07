@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>检索结果 · 失物招领</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page">
+  <div class="page-title" id="summary">检索结果</div>
+
+  <div class="filter">
+    <div class="filter-row">
+      <span class="filter-label">类型</span>
+      <span class="chip active" data-k="type" data-v="">全部</span>
+      <span class="chip" data-k="type" data-v="1">失物</span>
+      <span class="chip" data-k="type" data-v="2">招领</span>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">分类</span>
+      <span class="chip active" data-k="categoryId" data-v="">全部</span>
+      <span id="catChips"></span>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">地点</span>
+      <span class="chip active" data-k="areaType" data-v="">全部</span>
+      <span class="chip" data-k="areaType" data-v="1">校内</span>
+      <span class="chip" data-k="areaType" data-v="2">校外</span>
+      <select id="locSel" style="margin-left:6px"><option value="">详细地点不限</option></select>
+      <span class="filter-label" style="width:auto;margin-left:10px">排序</span>
+      <select id="sortSel">
+        <option value="newest">最新发布</option>
+        <option value="happen_desc">发生时间最近</option>
+        <option value="oldest">最早发布</option>
+      </select>
+      <span class="filter-label" style="width:auto;margin-left:10px">状态</span>
+      <select id="statusSel">
+        <option value="1">发布中</option>
+        <option value="2">已结束</option>
+        <option value="">全部</option>
+      </select>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="resetAll()">重置筛选</button>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">认领</span>
+      <span class="chip active" data-k="claimStatus" data-v="">全部</span>
+      <span class="chip" data-k="claimStatus" data-v="1">认领中</span>
+      <span class="chip" data-k="claimStatus" data-v="0">暂未认领</span>
+      <span class="muted" style="margin-left:6px">仅对失物生效</span>
+    </div>
+  </div>
+
+  <div class="grid-3" id="list"></div>
+  <div id="pager"></div>
+</div>
+
+<div class="footer">失物招领系统 v1.0</div>
+
+<script src="static/app.js"></script>
+<script>
+  const state = {
+    keyword: qs('keyword'), type: qs('type'), categoryId: qs('categoryId'),
+    areaType: qs('areaType'), locationId: qs('locationId'), claimStatus: qs('claimStatus'),
+    sort: qs('sort') || 'newest', status: qs('status') === '' ? '' : (qs('status') || '1'),
+    page: Number(qs('page')) || 1, size: 12,
+  };
+  let totalPages = 1;
+
+  function fillLocOptions() {
+    const list = state.areaType ? Dict.locList(state.areaType) : [...Dict.locations.campus, ...Dict.locations.outside];
+    const sel = el('locSel');
+    sel.innerHTML = '<option value="">详细地点不限</option>' +
+      list.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    if (!list.some((l) => String(l.id) === String(state.locationId))) state.locationId = '';
+    sel.value = state.locationId || '';
+  }
+
+  function markActive() {
+    document.querySelectorAll('.chip').forEach((c) => {
+      c.classList.toggle('active', String(state[c.dataset.k] || '') === c.dataset.v);
+    });
+    el('locSel').value = state.locationId || '';
+    el('sortSel').value = state.sort;
+    el('statusSel').value = state.status;
+  }
+
+  function syncUrl() {
+    const p = new URLSearchParams();
+    Object.keys(state).forEach((k) => {
+      if (state[k] !== '' && state[k] !== null && !(k === 'page' && state.page === 1) && !(k === 'size')) p.set(k, state[k]);
+    });
+    history.replaceState(null, '', 'search.html' + (p.toString() ? '?' + p : ''));
+  }
+
+  async function load() {
+    renderSkeleton('list', 6);
+    const p = new URLSearchParams();
+    if (state.keyword) p.set('keyword', state.keyword);
+    if (state.type) p.set('type', state.type);
+    if (state.categoryId) p.set('categoryId', state.categoryId);
+    if (state.areaType) p.set('areaType', state.areaType);
+    if (state.locationId) p.set('locationId', state.locationId);
+    if (state.claimStatus !== '') p.set('claimStatus', state.claimStatus);
+    p.set('sort', state.sort);
+    if (state.status !== '') p.set('status', state.status);
+    p.set('page', state.page);
+    p.set('size', state.size);
+
+    try {
+      const d = await api('/items?' + p.toString(), { auth: Store.logged });
+      totalPages = d.pages;
+      el('summary').innerHTML = state.keyword
+        ? `共找到 <b>${d.total}</b> 条与「${esc(state.keyword)}」相关的结果`
+        : `全部信息（${d.total} 条）`;
+      renderList('list', d.list, state.keyword);
+      el('pager').innerHTML = pagerHtml(d.page, d.pages, 'gotoPage');
+      markActive();
+      syncUrl();
+    } catch (e) { /* ignore */ }
+  }
+
+  function gotoPage(p) {
+    if (p < 1 || (totalPages && p > totalPages)) return;
+    state.page = p;
+    load();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function resetAll() {
+    Object.assign(state, {
+      keyword: '', type: '', categoryId: '', areaType: '', locationId: '',
+      claimStatus: '', sort: 'newest', status: '1', page: 1,
+    });
+    fillLocOptions();
+    load();
+  }
+
+  (async () => {
+    await boot('search');
+    await Dict.load();
+    el('catChips').innerHTML = Dict.categories
+      .map((c) => `<span class="chip" data-k="categoryId" data-v="${c.id}">${esc(c.name)}</span>`).join('');
+    fillLocOptions();
+    document.querySelectorAll('.chip').forEach((c) => {
+      c.onclick = () => {
+        state[c.dataset.k] = c.dataset.v;
+        state.page = 1;
+        if (c.dataset.k === 'areaType') fillLocOptions();
+        load();
+      };
+    });
+    el('locSel').onchange = (e) => { state.locationId = e.target.value; state.page = 1; load(); };
+    el('sortSel').onchange = (e) => { state.sort = e.target.value; state.page = 1; load(); };
+    el('statusSel').onchange = (e) => { state.status = e.target.value; state.page = 1; load(); };
+    await load();
+    const nk = el('navKw');
+    if (nk) nk.value = state.keyword || '';
+  })();
+</script>
+</body>
+</html>
