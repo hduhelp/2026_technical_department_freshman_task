@@ -1,0 +1,194 @@
+[
+  {
+    "id": "A01",
+    "title": "管理端 · 登录与审核队列",
+    "frames": 2,
+    "file": "A01.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A02",
+    "title": "管理端 · 审核详情与审核决定",
+    "frames": 2,
+    "file": "A02.png",
+    "width": 1024,
+    "height": 1536
+  },
+  {
+    "id": "A03",
+    "title": "管理端 · 历史审核与帖子管理",
+    "frames": 2,
+    "file": "A03.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A04",
+    "title": "管理端 · 帖子详情与下架",
+    "frames": 2,
+    "file": "A04.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A05",
+    "title": "管理端 · 举报队列与版本对照",
+    "frames": 2,
+    "file": "A05.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A06",
+    "title": "管理端 · 举报决定与账号列表",
+    "frames": 2,
+    "file": "A06.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A07",
+    "title": "管理端 · 禁用账号与密码重置",
+    "frames": 2,
+    "file": "A07.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "A08",
+    "title": "管理端 · 日志、账号菜单与系统状态",
+    "frames": 2,
+    "file": "A08.png",
+    "width": 1024,
+    "height": 1536
+  },
+  {
+    "id": "M01",
+    "title": "小程序 · 登录与绑定",
+    "frames": 4,
+    "file": "M01.png",
+    "width": 1704,
+    "height": 923
+  },
+  {
+    "id": "M02",
+    "title": "小程序 · 发现与搜索",
+    "frames": 4,
+    "file": "M02.png",
+    "width": 1704,
+    "height": 923
+  },
+  {
+    "id": "M03",
+    "title": "小程序 · 详情、看图与举报",
+    "frames": 4,
+    "file": "M03.png",
+    "width": 1536,
+    "height": 1024
+  },
+  {
+    "id": "M04",
+    "title": "小程序 · 发布完整表单",
+    "frames": 4,
+    "file": "M04.png",
+    "width": 1704,
+    "height": 923
+  },
+  {
+    "id": "M05",
+    "title": "小程序 · 我的、通知与历史",
+    "frames": 4,
+    "file": "M05.png",
+    "width": 1536,
+    "height": 1024
+  },
+  {
+    "id": "M06",
+    "title": "小程序 · 本人帖子与编辑操作",
+    "frames": 4,
+    "file": "M06.png",
+    "width": 1536,
+    "height": 1024
+  },
+  {
+    "id": "M07",
+    "title": "小程序 · 表单、额度与访问状态",
+    "frames": 4,
+    "file": "M07.png",
+    "width": 1536,
+    "height": 1024
+  },
+  {
+    "id": "M08",
+    "title": "小程序 · 账号、改密与微信换绑",
+    "frames": 4,
+    "file": "M08.png",
+    "width": 1706,
+    "height": 922
+  },
+  {
+    "id": "W01",
+    "title": "用户网页 · 登录与强制改密",
+    "frames": 2,
+    "file": "W01.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W02",
+    "title": "用户网页 · 首页与搜索筛选",
+    "frames": 2,
+    "file": "W02.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W03",
+    "title": "用户网页 · 帖子详情、图片与举报",
+    "frames": 2,
+    "file": "W03.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W04",
+    "title": "用户网页 · 发布与提交结果",
+    "frames": 2,
+    "file": "W04.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W05",
+    "title": "用户网页 · 我的帖子与通知",
+    "frames": 2,
+    "file": "W05.png",
+    "width": 1024,
+    "height": 1536
+  },
+  {
+    "id": "W06",
+    "title": "用户网页 · 本人详情、重审与撤回",
+    "frames": 2,
+    "file": "W06.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W07",
+    "title": "用户网页 · 账号与修改密码",
+    "frames": 2,
+    "file": "W07.png",
+    "width": 1122,
+    "height": 1402
+  },
+  {
+    "id": "W08",
+    "title": "用户网页 · 空态、失败与表单保护",
+    "frames": 2,
+    "file": "W08.png",
+    "width": 1024,
+    "height": 1536
+  }
+]
