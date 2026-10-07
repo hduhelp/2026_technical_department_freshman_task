@@ -1,0 +1,71 @@
+/**
+ * 全局样式。
+ *
+ * 三条主线：
+ * 1. 移动端优先：整站在 640px 内居中，桌面上呈现为一条"手机列"；
+ * 2. 固定定位组件（TabBar / ActionBar / NavBar）要跟着这条列走，
+ *    否则它们会横跨整个桌面窗口，和内容错位；
+ * 3. 安全区适配：全面屏底部手势条不遮挡操作栏。
+ */
+
+html {
+  background: #f7f8fa;
+}
+
+body {
+  /* 移动端优先：桌面打开时是一条居中的手机列 */
+  max-width: 640px;
+  margin: 0 auto;
+  background: #f7f8fa;
+  color: #323233;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+/* ===== 固定定位组件对齐 640px 手机列 =====
+   用 left:0 + right:0 + max-width + margin:auto 居中。
+   ⚠️ 不要改成 `right: auto; left: 50%; transform: translateX(-50%)`：
+   对 fixed 元素来说 right:auto 会让宽度退化成「内容宽度」，
+   操作栏会被压成按钮本身那么窄（按钮文字换行、右侧留白）。 */
+.van-tabbar--fixed,
+.van-action-bar,
+.van-nav-bar--fixed {
+  left: 0;
+  right: 0;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* ===== 安全区：全面屏底部操作栏不被手势条遮挡 ===== */
+.van-action-bar {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ===== 通用卡片 ===== */
+.card {
+  background: #fff;
+  border-radius: 8px;
+}
+
+.page {
+  min-height: 100vh;
+  padding-bottom: 16px;
+}
+
+/* 列表页容器：给 TabBar 之外的呼吸空间 */
+.page-pad {
+  padding: 12px;
+}

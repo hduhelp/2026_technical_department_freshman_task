@@ -1,0 +1,26 @@
+# 本地开发用 MySQL 8.0。
+# 若本机已安装 MySQL 8，可不用本文件，直接手动建库并导入 sql/schema.sql。
+#
+# ⚠️ MYSQL_ROOT_PASSWORD 必须与 server/.env 里的 DB_PASSWORD 保持一致，
+#    否则后端能起的来但连不上库（表现为 /api/health 返回 db: down）。
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lostfound-mysql
+    restart: unless-stopped
+    environment:
+      # 与 .env.example 的默认值保持同步；改这里就同时改 .env
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-lostfound123}
+      MYSQL_DATABASE: ${DB_NAME:-lost_found}
+      TZ: UTC
+    env_file:
+      - .env
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports: ["3306:3306"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${DB_PASSWORD:-lostfound123}"]
+      interval: 5s
+      retries: 20
+volumes:
+  mysql-data:
