@@ -69,3 +69,5 @@ export async function upload(file) {
   const data = new FormData(); data.append('file', file)
   return request('/users/me/image-uploads', { method: 'POST', data })
 }
+
+export function imageURL(url,size){return url ? url+(url.includes('?')?'&':'?')+'size='+size : url}

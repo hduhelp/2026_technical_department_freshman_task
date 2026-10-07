@@ -89,9 +89,13 @@ func PreviewImage(c *gin.Context) {
 		return
 	}
 
+	var input dto.ImageQueryDTO
+	if !ctrl.BindQuery(c, &input) {
+		return
+	}
 	ctx, cancel := ctrl.Context(c)
 	defer cancel()
-	data, kind, err := service.PreviewPostImage(ctx, actor, c.Param("filename"))
+	data, kind, err := service.PreviewPostImage(ctx, actor, c.Param("filename"), input.Size)
 	if err != nil {
 		ctrl.Fail(c, err)
 		return
@@ -121,7 +125,7 @@ func GetPostImage(c *gin.Context) {
 
 	ctx, cancel := ctrl.Context(c)
 	defer cancel()
-	data, kind, err := service.ReadPostImage(ctx, actor, id, index, input.Revision)
+	data, kind, err := service.ReadPostImage(ctx, actor, id, index, input.Revision, input.Size)
 	if err != nil {
 		ctrl.Fail(c, err)
 		return
@@ -148,9 +152,13 @@ func GetReviewImage(c *gin.Context) {
 		return
 	}
 
+	var input dto.ImageQueryDTO
+	if !ctrl.BindQuery(c, &input) {
+		return
+	}
 	ctx, cancel := ctrl.Context(c)
 	defer cancel()
-	data, kind, err := service.ReadReviewImage(ctx, actor, id, reviewID, index)
+	data, kind, err := service.ReadReviewImage(ctx, actor, id, reviewID, index, input.Size)
 	if err != nil {
 		ctrl.Fail(c, err)
 		return

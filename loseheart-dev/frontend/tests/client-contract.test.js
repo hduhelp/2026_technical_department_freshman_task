@@ -40,7 +40,7 @@ test('native requests use bearer tokens and clear revoked sessions',async()=>{
 test('native interrupted publication restores inputs and reuses its idempotency key',async()=>{
   const domain=require('../../miniprogram/utils/domain.js'),app={globalData:{user:{id:'3'},drafts:{},preserveDrafts:false}},writes=[]
   let revoked=true
-  const api={guard:()=>true,request:async(path,options)=>{if(path.endsWith('post-quota'))return {remaining:1,limit:3};writes.push(options);if(revoked){app.globalData.preserveDrafts=true;throw Object.assign(new Error('请重新登录'),{code:'TOKEN_REVOKED',status:401})}return {id:'test-post'}}}
+  const api={loadImages(){},guard:()=>true,request:async(path,options)=>{if(path.endsWith('post-quota'))return {remaining:1,limit:3};writes.push(options);if(revoked){app.globalData.preserveDrafts=true;throw Object.assign(new Error('请重新登录'),{code:'TOKEN_REVOKED',status:401})}return {id:'test-post'}}}
   const module={exports:{}}
   vm.runInNewContext(readFileSync(new URL('../../miniprogram/utils/postForm.js',import.meta.url),'utf8'),{module,require:name=>name==='./api'?api:domain,getApp:()=>app,wx:{disableAlertBeforeUnload(){},enableAlertBeforeUnload(){}}})
   const makePage=()=>{const page=module.exports();page.setData=patch=>Object.assign(page.data,patch);page.onLoad({});return page}

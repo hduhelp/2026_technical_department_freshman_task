@@ -8,6 +8,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -136,11 +137,12 @@ func PreviewPostImage(
 	ctx context.Context,
 	actor entity.AuthUser,
 	filename string,
+	size ...string,
 ) ([]byte, string, error) {
 	if !validImageFilename(filename) {
 		return nil, "", errs.ResourceNotFoundError
 	}
-	return readPrivateImage(ctx, imageObjectPrefix(actor.ID)+filename)
+	return readPrivateImage(ctx, imageObjectPrefix(actor.ID)+filename, size...)
 }
 
 // ReadPostImage 每次核对当前内容版本及可见权限，旧 revision 不会读取到新内容图片。
@@ -150,6 +152,7 @@ func ReadPostImage(
 	postID uint64,
 	index int,
 	revision uint32,
+	size ...string,
 ) ([]byte, string, error) {
 	db, err := Database(ctx)
 	if err != nil {
@@ -168,7 +171,7 @@ func ReadPostImage(
 	if post.Revision != revision || index < 0 || index >= len(post.Images) || !validImageKey(post.AuthorID, post.Images[index]) {
 		return nil, "", errs.ResourceNotFoundError
 	}
-	return readPrivateImage(ctx, post.Images[index])
+	return readPrivateImage(ctx, post.Images[index], size...)
 }
 
 // ReadReviewImage 从指定帖子的不可变审核快照中取图，普通读者不能读取历史内容。
@@ -177,6 +180,7 @@ func ReadReviewImage(
 	actor entity.AuthUser,
 	postID, reviewID uint64,
 	index int,
+	size ...string,
 ) ([]byte, string, error) {
 	db, err := Database(ctx)
 	if err != nil {
@@ -203,7 +207,7 @@ func ReadReviewImage(
 	if index < 0 || index >= len(review.ContentSnapshot.Images) || !validImageKey(post.AuthorID, review.ContentSnapshot.Images[index]) {
 		return nil, "", errs.ResourceNotFoundError
 	}
-	return readPrivateImage(ctx, review.ContentSnapshot.Images[index])
+	return readPrivateImage(ctx, review.ContentSnapshot.Images[index], size...)
 }
 
 // imageBucket 只使用后端固定配置；不接受请求提供 Endpoint、Bucket 或签名 URL。
@@ -234,14 +238,31 @@ func imageBucket() (*oss.Bucket, error) {
 }
 
 // readPrivateImage 通过后端代理返回有限大小图片；任何错误在开始图片响应前处理。
-func readPrivateImage(ctx context.Context, key string) ([]byte, string, error) {
+func readPrivateImage(ctx context.Context, key string, size ...string) ([]byte, string, error) {
+	options := []oss.Option{oss.WithContext(ctx)}
+	variant := "original"
+	if len(size) > 0 && size[0] != "" {
+		variant = size[0]
+	}
+	switch variant {
+	case "original":
+	case "cover":
+		options = append(options, oss.Process("image/resize,m_lfit,w_480,h_480/format,jpg/quality,q_80"))
+	case "display":
+		options = append(options, oss.Process("image/resize,m_lfit,w_1280,h_1280/format,jpg/quality,q_85"))
+	default:
+		return nil, "", errs.ValidationError
+	}
+	started := time.Now()
 	bucket, err := imageBucket()
 	if err != nil {
 		return nil, "", err
 	}
 
-	body, err := bucket.GetObject(key, oss.WithContext(ctx))
+	body, err := bucket.GetObject(key, options...)
+	headersElapsed := time.Since(started)
 	if err != nil {
+		log.Printf("OSS image stage=headers size=%s elapsed=%s deadline=%t error_type=%T", variant, headersElapsed, errors.Is(err, context.DeadlineExceeded), err)
 		if missingImage(err) {
 			return nil, "", errs.ResourceNotFoundError
 		}
@@ -251,8 +272,10 @@ func readPrivateImage(ctx context.Context, key string) ([]byte, string, error) {
 
 	data, err := io.ReadAll(io.LimitReader(body, ImageMaxBytes+1))
 	if err != nil || len(data) > ImageMaxBytes {
+		log.Printf("OSS image stage=body size=%s headers=%s total=%s bytes=%d deadline=%t error_type=%T", variant, headersElapsed, time.Since(started), len(data), errors.Is(err, context.DeadlineExceeded), err)
 		return nil, "", errs.OSSUnavailableError
 	}
+	log.Printf("OSS image stage=complete size=%s headers=%s total=%s bytes=%d", variant, headersElapsed, time.Since(started), len(data))
 	mimeType := http.DetectContentType(data)
 	if mimeType != "image/jpeg" && mimeType != "image/png" {
 		return nil, "", errs.OSSUnavailableError

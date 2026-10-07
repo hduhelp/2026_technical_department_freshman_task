@@ -3963,3 +3963,7 @@ GET /api/v1/admin/operation-logs/9001 HTTP/1.1
 业务说明：展示操作者、动作、目标、原因、前后状态和时间；记录只读，不提供修改或删除接口。
 
 异常状态：404 RESOURCE_NOT_FOUND
+
+### 图片显示尺寸
+
+帖子图片、审核快照图片和本人上传预览均支持可选 `size=original|cover|display`，省略时返回原图。`cover` 在 OSS 缩放至最多 480×480，JPEG 质量 80；`display` 最多 1280×1280，JPEG 质量 85。保持比例，不覆盖原图。参数只能使用上述固定值，不接受任意 OSS 处理指令。所有尺寸仍经过相同的账号、帖子可见性及 revision 校验，响应继续 `Cache-Control: no-store`。列表使用 cover，详情使用 display，点开预览请求原图。

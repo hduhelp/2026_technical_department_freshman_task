@@ -285,8 +285,12 @@ func TestPostsIntegration(t *testing.T) {
 	config.ServerConfig.AliOSS.Endpoint = "https://oss-cn-beijing.aliyuncs.com"
 	config.ServerConfig.AliOSS.BucketName, config.ServerConfig.AliOSS.AccessKeyId, config.ServerConfig.AliOSS.AccessKeySecret = "test-bucket", "test-key", "test-secret"
 	objects := make(map[string][]byte)
+	var imageProcess string
 	http.DefaultTransport = transportFunc(func(request *http.Request) (*http.Response, error) {
 		key := strings.TrimPrefix(request.URL.Path, "/")
+		if request.Method == http.MethodGet {
+			imageProcess = request.URL.Query().Get("x-oss-process")
+		}
 		body := []byte{}
 		header := make(http.Header)
 		status := 200
@@ -338,6 +342,17 @@ func TestPostsIntegration(t *testing.T) {
 	got, _, err = service.ReadPostImage(ctx, reader, imagePostID, 0, imagePost.Revision)
 	if err != nil || !bytes.Equal(got, imageData.Bytes()) {
 		t.Fatal("current image proxy failed", err)
+	}
+	for _, size := range []string{"cover", "display"} {
+		if _, _, err := service.ReadPostImage(ctx, reader, imagePostID, 0, imagePost.Revision, size); err != nil || !strings.Contains(imageProcess, "image/resize") || !strings.Contains(imageProcess, "format,jpg") {
+			t.Fatal("processed image request failed", err, imageProcess)
+		}
+		if _, _, err := service.ReadPostImage(ctx, actor, imagePostID, 0, imagePost.Revision, size); !errors.Is(err, errs.ResourceNotFoundError) {
+			t.Fatal("processed hidden image leaked", err)
+		}
+	}
+	if _, _, err := service.ReadPostImage(ctx, reader, imagePostID, 0, imagePost.Revision, "arbitrary"); !errors.Is(err, errs.ValidationError) {
+		t.Fatal("unrestricted processing accepted", err)
 	}
 	if _, _, err := service.ReadPostImage(ctx, actor, imagePostID, 0, imagePost.Revision); !errors.Is(err, errs.ResourceNotFoundError) {
 		t.Fatal("hidden post image leaked", err)

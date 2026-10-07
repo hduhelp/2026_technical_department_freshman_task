@@ -21,7 +21,13 @@ type PostImagePathDTO struct {
 }
 
 // PostImageQueryDTO 读取帖子图片时用于校验内容版本的查询参数。
+// ImageQueryDTO 仅允许原图、480px 封面和 1280px 展示图，不接受任意 OSS 处理指令。
+type ImageQueryDTO struct {
+	Size string `form:"size" binding:"omitempty,oneof=original cover display"`
+}
+
 type PostImageQueryDTO struct {
+	ImageQueryDTO
 	Revision uint32 `form:"revision" binding:"required,gte=1"`
 }
 
