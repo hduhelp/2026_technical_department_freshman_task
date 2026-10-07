@@ -1,0 +1,9 @@
+{
+  "appid": "wxac7f48ae41ea7c72",
+  "projectname": "杭电失物招领",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "libVersion": "latest",
+  "setting": {"urlCheck": false, "es6": true, "enhance": true, "postcss": true, "minified": true},
+  "condition": {}
+}

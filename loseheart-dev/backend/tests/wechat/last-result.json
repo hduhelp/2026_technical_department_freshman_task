@@ -1,0 +1,12 @@
+{
+  "stage": "real_wechat_backend_login",
+  "appid": "wxac7f48ae41ea7c72",
+  "real_wx_login_code": true,
+  "http_status": 409,
+  "code": "WECHAT_NOT_BOUND",
+  "request_id": "9acdce81-3720-4b5e-a038-4a3c214ef1bf",
+  "success": true,
+  "checked_at": "2026-10-06T15:40:39+08:00",
+  "meaning": "真实微信code经Go后端交换成功；当前微信身份未绑定校园账号",
+  "devtools_service_port_closed": true
+}

@@ -1,0 +1,144 @@
+{
+  "mode": "built-in image_gen",
+  "boards": [
+    {
+      "id": "W01",
+      "correction": "Keep BOTH stacked frames and their layouts, fonts and form fields. In BOTH frames remove 首页、发布、我的 navigation AND 林同学 account avatar/menu entirely: these are restricted login pages, only the brand title may remain. In top frame REMOVE entire campus background photograph and blue wash, replace with solid #F5F5F7 and keep modest three-step text and login card on solid white. No university architecture, no giant hero. Bottom force-change page retain 原密码 新密码 确认新密码, helper 8–32个字符，支持空格与中文 and only 修改并重新登录 / 退出 actions. No business nav.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep BOTH stacked frames and their layouts, fonts and form fields. In BOTH frames remove 首页、发布、我的 navigation AND 林同学 account avatar/menu entirely: these are restricted login pages, only the brand title may remain. In top frame REMOVE entire campus background photograph and blue wash, replace with solid #F5F5F7 and keep modest three-step text and login card on solid white. No university architecture, no giant hero. Bottom force-change page retain 原密码 新密码 确认新密码, helper 8–32个字符，支持空格与中文 and only 修改并重新登录 / 退出 actions. No business nav.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W01.png",
+      "revised": true
+    },
+    {
+      "id": "W03",
+      "correction": "Keep both full desktop frames unchanged except: in W03-2 其他 radio is selected, so replace 补充描述（选填） with 补充说明（必填） and under textarea add 选择“其他”必须填写说明. Max500 remains. Browser address on both frames replace university domain with https://example.test. Remove campus/faculty details under user avatar; only 林同学 and 模拟校园账号.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both full desktop frames unchanged except: in W03-2 其他 radio is selected, so replace 补充描述（选填） with 补充说明（必填） and under textarea add 选择“其他”必须填写说明. Max500 remains. Browser address on both frames replace university domain with https://example.test. Remove campus/faculty details under user avatar; only 林同学 and 模拟校园账号.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W03.png",
+      "revised": true
+    },
+    {
+      "id": "W04",
+      "correction": "Keep both desktop frames and every existing form group. W04-1 图片 is OPTIONAL: remove red required star by 图片, label 图片（选填）. Exactly SIX upload positions total including add tile, not seven. Add helper 首张为封面，可调整顺序；JPEG/PNG，每张不超过5MB. W04-2 right-side quota block is an ALTERNATIVE STATE, clearly label outside it 额度用完时的状态示例 so it does not contradict successful-post remaining1. All other form limits unchanged50/100/300.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both desktop frames and every existing form group. W04-1 图片 is OPTIONAL: remove red required star by 图片, label 图片（选填）. Exactly SIX upload positions total including add tile, not seven. Add helper 首张为封面，可调整顺序；JPEG/PNG，每张不超过5MB. W04-2 right-side quota block is an ALTERNATIVE STATE, clearly label outside it 额度用完时的状态示例 so it does not contradict successful-post remaining1. All other form limits unchanged50/100/300.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W04.png",
+      "revised": true
+    },
+    {
+      "id": "W05",
+      "correction": "Keep both frames. Replace BOTH quota summaries completely with EXACT: 今日剩余发布额度; 2 / 3 条; 每日最多提交3条新帖，北京时间零点恢复. Remove ALL mentions 本月 每月 5次. In top third completed row remove disabled 标记已找回 action and instead show 恢复待认领 (for found post 已归还) as an enabled secondary action. Withdrawn row ONLY 查看; remove disabled 撤回 button. Everything else stays.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both frames. Replace BOTH quota summaries completely with EXACT: 今日剩余发布额度; 2 / 3 条; 每日最多提交3条新帖，北京时间零点恢复. Remove ALL mentions 本月 每月 5次. In top third completed row remove disabled 标记已找回 action and instead show 恢复待认领 (for found post 已归还) as an enabled secondary action. Withdrawn row ONLY 查看; remove disabled 撤回 button. Everything else stays.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W05.png",
+      "revised": true
+    },
+    {
+      "id": "W06",
+      "correction": "Keep both full frames. In W06-2 restore the COMPLETE edit form: 帖子类型 寻物/拾物, 物品名称 (max50, counter10/50), 校区, 具体地点 (max100), 丢失日期2026-10-05, 时间精度 仅日期/具体时间/时间段 with optional time inputs, 物品描述 max300 counter56/300, images OPTIONAL and max6, contact required complete example 微信demo_wechat 手机13800000000. No 40-name limit, no500-description. Completion 已找回 is a read-only badge with 保留此状态, NOT editable checkbox. Images may be rearranged in edit. Compact fields enough to fit, slightly expand lower frame if needed. Top frame resolution examples correctly include 已找回 for completed and 已撤回 for withdrawn. Do not omit location/date. Keep history and withdraw side insets.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both full frames. In W06-2 restore the COMPLETE edit form: 帖子类型 寻物/拾物, 物品名称 (max50, counter10/50), 校区, 具体地点 (max100), 丢失日期2026-10-05, 时间精度 仅日期/具体时间/时间段 with optional time inputs, 物品描述 max300 counter56/300, images OPTIONAL and max6, contact required complete example 微信demo_wechat 手机13800000000. No 40-name limit, no500-description. Completion 已找回 is a read-only badge with 保留此状态, NOT editable checkbox. Images may be rearranged in edit. Compact fields enough to fit, slightly expand lower frame if needed. Top frame resolution examples correctly include 已找回 for completed and 已撤回 for withdrawn. Do not omit location/date. Keep history and withdraw side insets.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W06.png",
+      "revised": true
+    },
+    {
+      "id": "M02",
+      "correction": "Keep four aligned mobile frames. In FIRST frame add a FIXED bottom navigation identical to second/fourth frame: 首页 / 发布 / 我的 with 首页 blue. Content scrolls behind safe area, last card clipped ABOVE tabbar not instead of tabbar. Make third card a true text-only card without image thumbnail, align its text to left, showing 高等数学. Other frames unchanged.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep four aligned mobile frames. In FIRST frame add a FIXED bottom navigation identical to second/fourth frame: 首页 / 发布 / 我的 with 首页 blue. Content scrolls behind safe area, last card clipped ABOVE tabbar not instead of tabbar. Make third card a true text-only card without image thumbnail, align its text to left, showing 高等数学. Other frames unchanged.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "M02.png",
+      "revised": true
+    },
+    {
+      "id": "M03",
+      "correction": "Keep four mobile frames. FIRST and SECOND frames are SECONDARY detail pages, remove their bottom 首页/发布/我的 tab bars entirely. SECOND is another user's post: remove 更新状态 action from completed card; no status update or edit actions here. Change completed explanatory sentence to 发布者已标记归还 rather than claiming independent verified return. FIRST contact value and copy remain. FOURTH reason 虚假信息 selected means explanation optional but keep note 选择其他时必填. Do not alter viewer.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep four mobile frames. FIRST and SECOND frames are SECONDARY detail pages, remove their bottom 首页/发布/我的 tab bars entirely. SECOND is another user's post: remove 更新状态 action from completed card; no status update or edit actions here. Change completed explanatory sentence to 发布者已标记归还 rather than claiming independent verified return. FIRST contact value and copy remain. FOURTH reason 虚假信息 selected means explanation optional but keep note 选择其他时必填. Do not alter viewer.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "M03.png",
+      "revised": true
+    },
+    {
+      "id": "M04",
+      "correction": "Keep four mobile frames and ALL existing fields and geometry. In THIRD frame change 物品图片 * to 物品图片（选填）, no required star. Helper explicitly 最多6张，每张不超过5 MB，JPEG/PNG. Replace second campus-card thumbnail with another umbrella detail photo so item photos match found umbrella. Keep contact mandatory and other 50/100/300 counts. In FIRST frame replace bottom disabled 下一步 with disabled 提交审核 to express one scrolling form, not unnecessary step wizard. No new fields.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep four mobile frames and ALL existing fields and geometry. In THIRD frame change 物品图片 * to 物品图片（选填）, no required star. Helper explicitly 最多6张，每张不超过5 MB，JPEG/PNG. Replace second campus-card thumbnail with another umbrella detail photo so item photos match found umbrella. Keep contact mandatory and other 50/100/300 counts. In FIRST frame replace bottom disabled 下一步 with disabled 提交审核 to express one scrolling form, not unnecessary step wizard. No new fields.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "M04.png",
+      "revised": true
+    },
+    {
+      "id": "M05",
+      "correction": "Keep four mobile frames. FIRST profile must say 模拟校园账号 not 杭电校园账号. In THIRD notification list replace bottom under 帖子下架 text with EXACT: 你的帖子因图片泄露证件号码被下架，请修改后重新提交审核。Remove ALL 超过时效, 自动过期, 重新发布 wording. Replace 举报处理结果 body with EXACT: 你举报的帖子已被下架。处理原因：图片泄露证件号码。In FOURTH current summary badge should be 待审核 (because v2 is pending), old timeline v1 stays退回修改. Do not add profile editing.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep four mobile frames. FIRST profile must say 模拟校园账号 not 杭电校园账号. In THIRD notification list replace bottom under 帖子下架 text with EXACT: 你的帖子因图片泄露证件号码被下架，请修改后重新提交审核。Remove ALL 超过时效, 自动过期, 重新发布 wording. Replace 举报处理结果 body with EXACT: 你举报的帖子已被下架。处理原因：图片泄露证件号码。In FOURTH current summary badge should be 待审核 (because v2 is pending), old timeline v1 stays退回修改. Do not add profile editing.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "M05.png",
+      "revised": true
+    },
+    {
+      "id": "M06",
+      "correction": "Keep four frames; only specified fixes. Frame1 own READ-ONLY detail images must have NO X deletion controls and no +upload; remove bottom tabs, it's a detail subpage. Frame3 edit form: name counter4/50, location11/100, description30/300. Images OPTIONAL, remove mandatory star. Add explicit 时间精度 仅日期 / 具体时间 / 时间段 control; date required, exact time only conditionally required, label 时间（可选）. Add type 寻物/拾物 selection. Contact full fictional number13800000000, not masked, type field and 添加联系方式. Keep existing edit-re-review notice. Frame4 readonly returned detail: remove +upload tile and any image X; only 修改并重新提交 starts editing. No bottom tabbars on any frame. Correct saved completed umbrella type lost if needed to match 已找回. Keep all4.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep four frames; only specified fixes. Frame1 own READ-ONLY detail images must have NO X deletion controls and no +upload; remove bottom tabs, it's a detail subpage. Frame3 edit form: name counter4/50, location11/100, description30/300. Images OPTIONAL, remove mandatory star. Add explicit 时间精度 仅日期 / 具体时间 / 时间段 control; date required, exact time only conditionally required, label 时间（可选）. Add type 寻物/拾物 selection. Contact full fictional number13800000000, not masked, type field and 添加联系方式. Keep existing edit-re-review notice. Frame4 readonly returned detail: remove +upload tile and any image X; only 修改并重新提交 starts editing. No bottom tabbars on any frame. Correct saved completed umbrella type lost if needed to match 已找回. Keep all4.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [
+        "Precisely edit this 4-screen mobile design board. Change ONLY first screen M06-1: restore an action area at bottom ABOVE safe area, with fullwidth blue primary button 标记已找回, followed by two smaller secondary buttons 编辑 and red text 撤回. This is the owner's approved active post so these 3 actions are required. There is plenty blank space below its contact row. Do NOT add global navigation tabs. Preserve ALL four screens, every other text, picture, layout and corrected counters exactly. In third screen replace label 时间（可选） with 具体时间（必填） because 具体时间 precision is selected. Output complete board.",
+        "Edit the attached 4-screen mobile design board. ONLY ADD to first screen M06-1, below contact row in the empty bottom space: one blue button 标记已找回 and a second row two buttons 编辑 / 撤回. NO bottom navigation. Preserve the rest of all four screens exactly, especially third screen correct counters 4/50, 11/100, 30/300, existing type and precision selectors, optional image label, full contact and add-contact control. Keep exactly four frames. Do not regenerate from a different screenshot. Change third label 时间（可选） to 具体时间（必填） because exact time mode is selected. Nothing else."
+      ],
+      "finalFile": "M06.png",
+      "revised": true
+    },
+    {
+      "id": "M07",
+      "correction": "Keep all four frames. FIRST form has several contradictory examples: clear name field so red 名称不能为空 matches empty; change future date value to2026-10-07 (reference date2026-10-06); keep reversed time18:00–16:00; change invalid phone to1380013800 (10digits) so error is correct. Description max300 so counter20/300, not200. 图片 OPTIONAL, remove star; label 图片（选填，最多6张） not最多4张. Keep upload failure retry and preserved-form banner. Other frames unchanged.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep all four frames. FIRST form has several contradictory examples: clear name field so red 名称不能为空 matches empty; change future date value to2026-10-07 (reference date2026-10-06); keep reversed time18:00–16:00; change invalid phone to1380013800 (10digits) so error is correct. Description max300 so counter20/300, not200. 图片 OPTIONAL, remove star; label 图片（选填，最多6张） not最多4张. Keep upload failure retry and preserved-form banner. Other frames unchanged.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "M07.png",
+      "revised": true
+    },
+    {
+      "id": "A03",
+      "correction": "Keep both full desktop frames. TOP search placeholder must be 搜索物品名称, NO searching 联系方式. In BOTTOM table strictly separate columns 审核状态 / 处理状态 / 可见性. Headphones审核通过/寻找中/公开. Umbrella退回修改/待认领/隐藏. Card下架/已归还/隐藏. Water bottle拒绝/寻找中/隐藏. Keys审核通过/已撤回/隐藏. Glasses审核通过/寻找中/作者已禁用. 下架 MUST ONLY be review status, not resolution. 作者已禁用 ONLY visibility, not resolution. Preserve clean table.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both full desktop frames. TOP search placeholder must be 搜索物品名称, NO searching 联系方式. In BOTTOM table strictly separate columns 审核状态 / 处理状态 / 可见性. Headphones审核通过/寻找中/公开. Umbrella退回修改/待认领/隐藏. Card下架/已归还/隐藏. Water bottle拒绝/寻找中/隐藏. Keys审核通过/已撤回/隐藏. Glasses审核通过/寻找中/作者已禁用. 下架 MUST ONLY be review status, not resolution. 作者已禁用 ONLY visibility, not resolution. Preserve clean table.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "A03.png",
+      "revised": true
+    },
+    {
+      "id": "A04",
+      "correction": "Keep both desktop frames. Replace result example 下架原因 包含个人联系方式 with exact 泄露他人证件号码. Posting one's own contact is required and NOT violation. Replace masked phone in allowed admin detail with fictional full13800000000 and label 联系方式. Remove invented academic college identity detail, keep 林同学 模拟校园账号. Otherwise unchanged.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both desktop frames. Replace result example 下架原因 包含个人联系方式 with exact 泄露他人证件号码. Posting one's own contact is required and NOT violation. Replace masked phone in allowed admin detail with fictional full13800000000 and label 联系方式. Remove invented academic college identity detail, keep 林同学 模拟校园账号. Otherwise unchanged.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "A04.png",
+      "revised": true
+    },
+    {
+      "id": "A05",
+      "correction": "Keep both frames and evidence/current comparison. This platform REQUIRES own contact and has NO chat. Change original report evidence: 描述中含他人完整证件号码，图片未遮挡; image has red outlined obscured private-number region. Keep contact_methods shown separately 微信demo_wechat or 手机13800000000 in BOTH versions. Current v2 correction text EXACT: 已遮挡他人证件号码，联系方式保留。REMOVE ALL 通过站内联系 / 已删除联系方式 / 包含个人联系方式 as violation; replace with 泄露他人证件号码. Current version show 审核通过/待认领 distinct labels. Top reasons only 虚假信息、不良内容、隐私泄露、骚扰、其他; replace 广告信息 with 不良内容. Keep reporter info and history. Footnote 历史快照只读. No chat wording anywhere.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both frames and evidence/current comparison. This platform REQUIRES own contact and has NO chat. Change original report evidence: 描述中含他人完整证件号码，图片未遮挡; image has red outlined obscured private-number region. Keep contact_methods shown separately 微信demo_wechat or 手机13800000000 in BOTH versions. Current v2 correction text EXACT: 已遮挡他人证件号码，联系方式保留。REMOVE ALL 通过站内联系 / 已删除联系方式 / 包含个人联系方式 as violation; replace with 泄露他人证件号码. Current version show 审核通过/待认领 distinct labels. Top reasons only 虚假信息、不良内容、隐私泄露、骚扰、其他; replace 广告信息 with 不良内容. Keep reporter info and history. Footnote 历史快照只读. No chat wording anywhere.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "A05.png",
+      "revised": true
+    },
+    {
+      "id": "A06",
+      "correction": "Keep two desktop frames. In first dialog under 禁用发布者 replace text with EXACT: 所有端登录失效，已有帖子隐藏，历史记录保留。Remove old claim existing posts not handled. Placeholder in required reason reads 请输入处理原因（1–500字）, NOT 至少5个字. Success outcome reason replace 包含个人联系方式 with 泄露他人证件号码. Keep all options requiring reason. No automatic punishment or retry. Second account table unchanged.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep two desktop frames. In first dialog under 禁用发布者 replace text with EXACT: 所有端登录失效，已有帖子隐藏，历史记录保留。Remove old claim existing posts not handled. Placeholder in required reason reads 请输入处理原因（1–500字）, NOT 至少5个字. Success outcome reason replace 包含个人联系方式 with 泄露他人证件号码. Keep all options requiring reason. No automatic punishment or retry. Second account table unchanged.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "A06.png",
+      "revised": true
+    },
+    {
+      "id": "A08",
+      "correction": "Keep two main frames and all subpanels. In A08-1 log action cells only these types allowed: 审核通过、退回修改、拒绝发布、下架帖子、处理举报、驳回举报、禁用账号、重置密码. Replace 标记为已找回 with审核通过, 删除帖子 with下架帖子, 解除禁用 with驳回举报; corresponding reasons consistent. This admin never deletes, unbans, or marks items complete. Reset detail before/after should say 登录凭证：旧版本→已失效；首次登录：需修改密码, not pretend password-reset is account status. In BOTH normal and forced password forms helper EXACT 8–32个字符，支持空格与中文. Remove suggested composition requirements. Force-change inset must include 原密码, 新密码, 确认新密码 three fields, submit and退出 only. Conflict dialog action 重新查看 rather than我知道了. Keep no password plaintext in logs.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep two main frames and all subpanels. In A08-1 log action cells only these types allowed: 审核通过、退回修改、拒绝发布、下架帖子、处理举报、驳回举报、禁用账号、重置密码. Replace 标记为已找回 with审核通过, 删除帖子 with下架帖子, 解除禁用 with驳回举报; corresponding reasons consistent. This admin never deletes, unbans, or marks items complete. Reset detail before/after should say 登录凭证：旧版本→已失效；首次登录：需修改密码, not pretend password-reset is account status. In BOTH normal and forced password forms helper EXACT 8–32个字符，支持空格与中文. Remove suggested composition requirements. Force-change inset must include 原密码, 新密码, 确认新密码 three fields, submit and退出 only. Conflict dialog action 重新查看 rather than我知道了. Keep no password plaintext in logs.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "A08.png",
+      "revised": true
+    },
+    {
+      "id": "W08",
+      "correction": "Keep both stacked desktop frames and all state specimens. In W08-2 image upload label MUST be 图片（选填）, remove required asterisk and change 最多4张 to 最多6张；JPEG/PNG，每张不超过5MB. Future date example must be2026-10-07 (today2026-10-06) so error is consistent. Replace bottom 发布 button with 提交审核. Contact field title 联系方式（至少一种）, with type dropdown 手机号 and invalid10digit1380013800, so not wrongly requiring phone as sole method. Restore compact required type 寻物/拾物 selection and 具体地点 field above date; current error-state specimen should still imply complete form. Top date filter label 事件时间 instead of发布时间. No new features.",
+      "prompt": "Use case: ui-mockup / precise UI text and structure correction. Edit the attached complete design board, retain its overall style, all screen IDs, full number of frames, readable Chinese typography and all unaffected content. Correct only the following product-rule issues, render exact text carefully. This is a design review revision, not a new feature.\nKeep both stacked desktop frames and all state specimens. In W08-2 image upload label MUST be 图片（选填）, remove required asterisk and change 最多4张 to 最多6张；JPEG/PNG，每张不超过5MB. Future date example must be2026-10-07 (today2026-10-06) so error is consistent. Replace bottom 发布 button with 提交审核. Contact field title 联系方式（至少一种）, with type dropdown 手机号 and invalid10digit1380013800, so not wrongly requiring phone as sole method. Restore compact required type 寻物/拾物 selection and 具体地点 field above date; current error-state specimen should still imply complete form. Top date filter label 事件时间 instead of发布时间. No new features.\nDo not create cropped screenshots or fewer frames. Output the complete corrected board.",
+      "additionalPrompts": [],
+      "finalFile": "W08.png",
+      "revised": true
+    }
+  ]
+}

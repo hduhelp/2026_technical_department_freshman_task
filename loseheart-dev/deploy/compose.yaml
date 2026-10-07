@@ -1,0 +1,51 @@
+name: lost-found
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: lost-found-mysql
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:13308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Missing MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: lost_found
+      MYSQL_USER: lost_found
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Missing MYSQL_PASSWORD}
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-time-zone=+00:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -u lost_found -D lost_found -e 'SELECT 1' >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  redis:
+    image: redis:7.4
+    container_name: lost-found-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:16379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Missing REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --appendfsync everysec --requirepass \"$$REDIS_PASSWORD\""]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+volumes:
+  mysql-data:
+    name: lost-found-mysql-data
+  redis-data:
+    name: lost-found-redis-data
