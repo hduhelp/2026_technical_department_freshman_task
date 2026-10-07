@@ -1,0 +1,19 @@
+# 本地配置（含数据库密码，绝不能提交）
+config.yaml
+
+# 编译产物
+*.exe
+lostfound
+
+# 部署产物（Linux 二进制 + 线上配置，含密码）
+dist/
+
+# 编辑器
+.idea/
+.vscode/
+
+# 个人工作记录（不提交）
+进度表.md
+
+# 截图中间产物（README 配图用 docs/images/ 下的）
+docs/screenshots/

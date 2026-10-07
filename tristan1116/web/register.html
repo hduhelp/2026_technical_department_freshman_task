@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册 · 校园失物招领系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="auth-wrap">
+    <div class="auth-logo">
+      <div class="emoji">📝</div>
+      <h1>注册账号</h1>
+      <p>注册后就能发布信息和查看联系方式</p>
+    </div>
+
+    <div class="field">
+      <label>用户名 <span class="hint">3~20 位，登录用</span></label>
+      <input class="input" id="username" autocomplete="username" placeholder="给自己起个用户名">
+    </div>
+
+    <div class="field">
+      <label>密码 <span class="hint">6~32 位</span></label>
+      <input class="input" id="password" type="password" autocomplete="new-password"
+        placeholder="设置密码">
+    </div>
+
+    <div class="field">
+      <label>昵称 <span class="hint">选填，不填就用用户名</span></label>
+      <input class="input" id="nickname" maxlength="32" placeholder="别人看到的名字">
+    </div>
+
+    <div class="field">
+      <label>学号 <span class="hint">选填</span></label>
+      <input class="input" id="studentId" maxlength="32" placeholder="例如 23051101">
+    </div>
+
+    <button class="btn btn-primary" id="regBtn">注 册</button>
+
+    <div class="auth-footer">
+      已有账号？<a href="login.html">去登录</a>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/register.js"></script>
+</body>
+</html>
