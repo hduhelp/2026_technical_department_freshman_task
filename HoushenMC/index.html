@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <script>
+        // 页面加载第一件事：检查登录状态
+        (function checkLogin(){
+        // 获取当前登录用户信息
+        const loginStr = localStorage.getItem("currentUser");
+        if(!loginStr){
+        alert("请先登录！");
+        // 没登录，自动跳转登录页面
+        window.location.href = "login.html";
+        return;
+        }
+        try{
+        // 把字符串转回JS对象
+        const currentUser = JSON.parse(loginStr);
+        // 必须存在用户名，才算有效登录
+        if(!currentUser.name){
+        throw new Error("用户信息无效");
+        }
+        }catch(err){
+        // JSON解析失败 / 用户信息为空 → 清除无效数据，跳登录
+        localStorage.removeItem("currentUser");
+        alert("登录信息失效，请重新登录");
+        window.location.href = "login.html";
+        }
+        })();
+    </script>
+    <meta charset="utf-8" />
+    <title>校园失物招领-主页</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        /* 主页额外的样式，卡片布局 */
+        body {
+            /* 主页不需要垂直居中，改成从上往下排版 */
+            align-items: flex-start;
+            padding: 30px;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+        }
+
+        .item-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin: 15px 0;
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-bar">
+            <h2>校园失物招领平台</h2>
+            <div>
+                <span id="userShow"></span>
+                <button onclick="logout()">退出登录</button>
+            </div>
+        </div>
+
+        <div class="form-box">
+            <h3>发布招领信息</h3>
+            <div class="form-row">
+                <label>物品类型：</label>
+                <select id="typeSelect">
+                    <option value="lost">丢失物品</option>
+                    <option value="found">捡到物品</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label>物品名称：</label>
+                <input type="text" id="itemName" placeholder="例如：校园卡">
+            </div>
+            <div class="form-row">
+                <label>描述信息：</label>
+                <textarea id="itemDesc" placeholder="描述物品、丢失地点时间"></textarea>
+            </div>
+            <button onclick="publishItem()">提交发布</button>
+        </div>
+
+        <h3>物品列表</h3>
+        <div id="itemList"></div>
+    </div>
+
+    <script>
+        // 获取当前登录用户
+        const currentUser = JSON.parse(localStorage.getItem("currentUser"));
+        document.getElementById("userShow").innerText = `欢迎，${currentUser.name}`;
+
+        // 退出登录函数
+        function logout(){
+        localStorage.removeItem("currentUser");
+        alert("已退出");
+        window.location.href = "login.html";
+        }
+
+        // 发布物品
+        function publishItem(){
+        const type = document.getElementById("typeSelect").value;
+        const name = document.getElementById("itemName").value.trim();
+        const desc = document.getElementById("itemDesc").value.trim();
+        if(!name || !desc){
+        alert("物品名称和描述不能为空！");
+        return;
+        }
+        // 获取旧数据
+        let itemArr = JSON.parse(localStorage.getItem("itemList")) || [];
+        // 添加新的物品对象
+        itemArr.push({
+        type: type,
+        name: name,
+        desc: desc,
+        author: currentUser.name,
+        time: new Date().toLocaleString()
+        });
+        // 存回localStorage
+        localStorage.setItem("itemList", JSON.stringify(itemArr));
+        alert("发布成功！");
+        renderList();
+        // 清空输入框
+        document.getElementById("itemName").value = "";
+        document.getElementById("itemDesc").value = "";
+        }
+
+        // 渲染物品列表
+        // 渲染物品列表
+        function renderList(){
+        const itemArr = JSON.parse(localStorage.getItem("itemList")) || [];
+        const dom = document.getElementById("itemList");
+        dom.innerHTML = "";
+        itemArr.forEach((item, index)=>{
+        // 只有发布者本人才能看到删除按钮
+        const delBtn = item.author === currentUser.name 
+            ? `<button onclick="deleteItem(${index})" style="width:auto; padding:6px 14px; background:#ff4d4f; margin-top:10px;">删除</button>`
+            : "";
+        dom.innerHTML += `
+        <div class="item-card">
+            <div><strong>${item.type==='lost'?'🔴 寻物启事':'🟢 捡到物品'}</strong></div>
+            <div>物品：${item.name}</div>
+            <div>详情：${item.desc}</div>
+            <div>发布人：${item.author}</div>
+            <div>时间：${item.time}</div>
+            ${delBtn}
+        </div>
+        `
+        })
+        }
+        // 页面加载渲染列表
+        renderList();
+        // 删除物品（只有本人可删）
+        function deleteItem(index){
+        if(!confirm("确定要删除这条信息吗？")) return;
+        let itemArr = JSON.parse(localStorage.getItem("itemList")) || [];
+        // 根据索引删掉对应那一条
+        itemArr.splice(index, 1);
+        // 存回去
+        localStorage.setItem("itemList", JSON.stringify(itemArr));
+        // 重新渲染
+        renderList();
+        alert("已删除");
+        }
+    </script>
+</body>
+</html>

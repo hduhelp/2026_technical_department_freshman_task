@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>登录 - 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-box">
+            <h2>用户登录</h2>
+            <div class="form-row">
+                <label>用户名</label>
+                <input type="text" id="username" placeholder="输入用户名">
+            </div>
+            <div class="form-row">
+                <label>密码</label>
+                <input type="password" id="password" placeholder="输入密码">
+            </div>
+            <button onclick="login()">登录</button>
+            <p style="margin-top:15px">没有账号？<a href="register.html">前往注册</a></p>
+        </div>
+    </div>
+    <script>
+        function login(){
+        // 获取输入框内容
+        const name = document.getElementById("username").value.trim();
+        const pwd = document.getElementById("password").value;
+        if(!name || !pwd){
+        alert("用户名和密码不能为空");
+        return;
+        }
+        // 取出所有注册用户
+        const userList = JSON.parse(localStorage.getItem("userList")) || [];
+        // 查询匹配用户
+        const findUser = userList.find(user=>user.name === name);
+        if(!findUser){
+        alert("用户名不存在");
+        return;
+        }
+        if(findUser.password !== pwd){
+        alert("密码错误");
+        return;
+        }
+        // 登录成功，写入当前登录用户标记
+        localStorage.setItem("currentUser", JSON.stringify({name:name}));
+        alert("登录成功！");
+        window.location.href = "index.html";
+        }
+    </script>
+</body>
+</html>

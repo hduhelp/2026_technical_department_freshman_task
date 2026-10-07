@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>注册 - 校园失物招领</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-box">
+            <h2>用户注册</h2>
+            <div class="form-row">
+                <label>设置用户名</label>
+                <input type="text" id="username" placeholder="用户名">
+            </div>
+            <div class="form-row">
+                <label>设置密码</label>
+                <input type="password" id="password" placeholder="密码">
+            </div>
+            <button onclick="register()">注册</button>
+            <p style="margin-top:15px">已有账号？<a href="login.html">前往登录</a></p>
+        </div>
+    </div>
+    <script>
+        function register(){
+        // 获取输入内容
+        const name = document.getElementById("username").value.trim();
+        const pwd = document.getElementById("password").value;
+        if(!name || !pwd){
+        alert("用户名、密码不能为空");
+        return;
+        }
+        // 读取已注册用户数组
+        const userList = JSON.parse(localStorage.getItem("userList")) || [];
+        // 判断用户名重复
+        const exist = userList.some(user=> user.name === name);
+        if(exist){
+        alert("用户名已经被占用！");
+        return;
+        }
+        // 添加新用户
+        userList.push({name:name, password:pwd});
+        // 保存到本地存储
+        localStorage.setItem("userList", JSON.stringify(userList));
+        alert("注册成功！可以去登录了");
+        window.location.href="login.html";
+        }
+    </script>
+</body>
+</html>
