@@ -1,0 +1,267 @@
+package main
+
+import (
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+)
+
+//go:embed static
+var staticFiles embed.FS
+
+const (
+	StatusSearching = "searching"
+	StatusFound     = "found"
+	StatusClosed    = "closed"
+)
+type Item struct {
+	ID          string    `json:"id"`
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	Category    string    `json:"category"`
+	Description string    `json:"description"`
+	Location    string    `json:"location"`
+	Contact     string    `json:"contact"`
+	Date        time.Time `json:"date"`
+	Status      string    `json:"status"`
+}
+
+type Store struct {
+	mu    sync.RWMutex
+	items []Item
+	path  string
+}
+
+func newStore(path string) (*Store, error) {
+	s := &Store{path: path, items: []Item{}}
+	data, err := os.ReadFile(path)
+	if err == nil && len(data) > 0 {
+		if err := json.Unmarshal(data, &s.items); err != nil {
+			return nil, err
+		}
+	}
+	if s.items == nil {
+		s.items = []Item{}
+	}
+	return s, nil
+}
+
+func (s *Store) save() error {
+	data, err := json.MarshalIndent(s.items, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.path, data, 0o644)
+}
+
+func (s *Store) add(it Item) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = append(s.items, it)
+	_ = s.save()
+}
+
+func (s *Store) updateStatus(id, status string) (Item, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		if s.items[i].ID == id {
+			s.items[i].Status = status
+			_ = s.save()
+			return s.items[i], true
+		}
+	}
+	return Item{}, false
+}
+
+func (s *Store) delete(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.items {
+		if s.items[i].ID == id {
+			s.items = append(s.items[:i], s.items[i+1:]...)
+			_ = s.save()
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) get(id string) (Item, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, it := range s.items {
+		if it.ID == id {
+			return it, true
+		}
+	}
+	return Item{}, false
+}
+func (s *Store) list(itemType, status, category, q string) []Item {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]Item, 0, len(s.items))
+	ql := strings.ToLower(strings.TrimSpace(q))
+	for _, it := range s.items {
+		if itemType != "" && itemType != "all" && it.Type != itemType {
+			continue
+		}
+		if status != "" && status != "all" && it.Status != status {
+			continue
+		}
+		if category != "" && category != "all" && it.Category != category {
+			continue
+		}
+		if ql != "" {
+			hay := strings.ToLower(it.Title + " " + it.Description + " " + it.Location + " " + it.Category + " " + it.Contact)
+			if !strings.Contains(hay, ql) {
+				continue
+			}
+		}
+		out = append(out, it)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Date.After(out[j].Date) })
+	return out
+}
+
+func newID() string {
+	b := make([]byte, 6)
+	_, _ = rand.Read(b)
+	return strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + hex.EncodeToString(b)
+}
+
+func isValidStatus(s string) bool {
+	return s == StatusSearching || s == StatusFound || s == StatusClosed
+}
+
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+type Server struct {
+	store *Store
+}
+
+func (srv *Server) handleList(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	items := srv.store.list(q.Get("type"), q.Get("status"), q.Get("category"), q.Get("q"))
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (srv *Server) handleCreate(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Type        string `json:"type"`
+		Title       string `json:"title"`
+		Category    string `json:"category"`
+		Description string `json:"description"`
+		Location    string `json:"location"`
+		Contact     string `json:"contact"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效请求数据"})
+		return
+	}
+	in.Title = strings.TrimSpace(in.Title)
+	if in.Title == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "标题不能为空"})
+		return
+	}
+	if in.Type != "lost" && in.Type != "found" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "类型必须是 lost 或 found"})
+		return
+	}
+	it := Item{
+		ID:          newID(),
+		Type:        in.Type,
+		Title:       in.Title,
+		Category:    strings.TrimSpace(in.Category),
+		Description: strings.TrimSpace(in.Description),
+		Location:    strings.TrimSpace(in.Location),
+		Contact:     strings.TrimSpace(in.Contact),
+		Date:        time.Now(),
+		Status:      StatusSearching,
+	}
+	srv.store.add(it)
+	writeJSON(w, http.StatusCreated, it)
+}
+
+func (srv *Server) handleGet(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	it, ok := srv.store.get(id)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "未找到该记录"})
+		return
+	}
+	writeJSON(w, http.StatusOK, it)
+}
+
+func (srv *Server) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var in struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || !isValidStatus(in.Status) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "无效的状态"})
+		return
+	}
+	it, ok := srv.store.updateStatus(id, in.Status)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "未找到该记录"})
+		return
+	}
+	writeJSON(w, http.StatusOK, it)
+}
+
+func (srv *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if !srv.store.delete(id) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "未找到该记录"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ok": "已删除"})
+}
+
+func main() {
+	dataPath := "data.json"
+	if v := os.Getenv("LOSTFOUND_DATA"); v != "" {
+		dataPath = v
+	}
+	store, err := newStore(dataPath)
+	if err != nil {
+		log.Fatalf("加载数据失败: %v", err)
+	}
+	srv := &Server{store: store}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/items", srv.handleList)
+	mux.HandleFunc("POST /api/items", srv.handleCreate)
+	mux.HandleFunc("GET /api/items/{id}", srv.handleGet)
+	mux.HandleFunc("PUT /api/items/{id}/status", srv.handleUpdateStatus)
+	mux.HandleFunc("DELETE /api/items/{id}", srv.handleDelete)
+
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("加载静态资源失败: %v", err)
+	}
+	mux.Handle("/", http.FileServer(http.FS(staticFS)))
+
+	addr := ":8080"
+	if v := os.Getenv("PORT"); v != "" {
+		addr = ":" + v
+	}
+	log.Printf("寻物启事服务已启动，访问 http://localhost%s", addr)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatal(err)
+	}
+}
