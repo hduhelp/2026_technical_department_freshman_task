@@ -31,6 +31,7 @@ type Post struct {
 	HappenedAt  time.Time `json:"happened_at"`
 	Description string    `json:"description"`
 	Contact     string    `json:"contact"`
+	ImageURL    string    `json:"image_url"`
 	Status      string    `json:"status" gorm:"index"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -48,17 +49,22 @@ type postInput struct {
 	HappenedAt  string `json:"happened_at"`
 	Description string `json:"description"`
 	Contact     string `json:"contact"`
+	ImageURL    string `json:"image_url"`
 }
 
 func parsePost(input postInput) (Post, bool) {
 	if (input.Type != "lost" && input.Type != "found") || strings.TrimSpace(input.ItemName) == "" || strings.TrimSpace(input.Location) == "" || strings.TrimSpace(input.Description) == "" || strings.TrimSpace(input.Contact) == "" {
 		return Post{}, false
 	}
-	happenedAt, err := time.Parse(time.RFC3339, input.HappenedAt)
-	if err != nil {
-		return Post{}, false
+	var happenedAt time.Time
+	if input.HappenedAt != "" {
+		var err error
+		happenedAt, err = time.Parse(time.RFC3339, input.HappenedAt)
+		if err != nil {
+			return Post{}, false
+		}
 	}
-	return Post{Type: input.Type, ItemName: strings.TrimSpace(input.ItemName), Location: strings.TrimSpace(input.Location), HappenedAt: happenedAt, Description: strings.TrimSpace(input.Description), Contact: strings.TrimSpace(input.Contact)}, true
+	return Post{Type: input.Type, ItemName: strings.TrimSpace(input.ItemName), Location: strings.TrimSpace(input.Location), HappenedAt: happenedAt, Description: strings.TrimSpace(input.Description), Contact: strings.TrimSpace(input.Contact), ImageURL: input.ImageURL}, true
 }
 
 func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
@@ -216,7 +222,7 @@ func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
 			return
 		}
 		post.Type, post.ItemName, post.Location = updated.Type, updated.ItemName, updated.Location
-		post.HappenedAt, post.Description, post.Contact = updated.HappenedAt, updated.Description, updated.Contact
+		post.HappenedAt, post.Description, post.Contact, post.ImageURL = updated.HappenedAt, updated.Description, updated.Contact, updated.ImageURL
 		db.Save(&post)
 		c.JSON(http.StatusOK, post)
 	})
@@ -246,8 +252,8 @@ func newRouter(db *gorm.DB, secret []byte) *gin.Engine {
 		var input struct {
 			Status string `json:"status"`
 		}
-		if c.ShouldBindJSON(&input) != nil || !((post.Status == "searching" && input.Status == "found") || (post.Status == "found" && input.Status == "closed")) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "状态只能按顺序变更"})
+		if c.ShouldBindJSON(&input) != nil || !((post.Status == "searching" && input.Status == "found") || ((post.Status == "found" || post.Status == "closed") && input.Status == "searching")) {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "状态只能按规则变更"})
 			return
 		}
 		post.Status = input.Status

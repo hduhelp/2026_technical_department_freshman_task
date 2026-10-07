@@ -132,9 +132,13 @@ func Test信息创建查询权限和状态流转(t *testing.T) {
 		"happened_at": "2026-09-26T14:30:00+08:00",
 		"description": "黑色卡套，里面有校园卡",
 		"contact":     "QQ：10001",
+		"image_url":   "data:image/png;base64,AAAA",
 	}, ownerToken)
 	if create.Code != http.StatusCreated {
 		t.Fatalf("创建信息状态码 = %d，期望 %d", create.Code, http.StatusCreated)
+	}
+	if !bytes.Contains(create.Body.Bytes(), []byte("data:image/png;base64,AAAA")) {
+		t.Fatal("发布信息未保留图片")
 	}
 	var post struct {
 		ID uint `json:"id"`
@@ -159,13 +163,13 @@ func Test信息创建查询权限和状态流转(t *testing.T) {
 	if found.Code != http.StatusOK {
 		t.Fatalf("标记已找到状态码 = %d，期望 %d", found.Code, http.StatusOK)
 	}
-	closed := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "closed"}, ownerToken)
-	if closed.Code != http.StatusOK {
-		t.Fatalf("标记已结束状态码 = %d，期望 %d", closed.Code, http.StatusOK)
+	unfound := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "searching"}, ownerToken)
+	if unfound.Code != http.StatusOK {
+		t.Fatalf("标记未找到状态码 = %d，期望 %d", unfound.Code, http.StatusOK)
 	}
-	illegal := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "found"}, ownerToken)
+	illegal := request(t, handler, http.MethodPatch, "/api/posts/1/status", map[string]string{"status": "closed"}, ownerToken)
 	if illegal.Code != http.StatusBadRequest {
-		t.Fatalf("已结束后变更状态码 = %d，期望 %d", illegal.Code, http.StatusBadRequest)
+		t.Fatalf("标记已结束状态码 = %d，期望 %d", illegal.Code, http.StatusBadRequest)
 	}
 
 	deleted := request(t, handler, http.MethodDelete, "/api/posts/1", nil, ownerToken)
