@@ -1,0 +1,38 @@
+# 配置模板：复制为 config.local.yaml，并填写本机私有凭证。
+server:
+  port: ":8080"
+database:
+  dsn: "lost_found:replace_with_mysql_password@tcp(127.0.0.1:13308)/lost_found?charset=utf8mb4&parseTime=True&loc=UTC&time_zone=%27%2B00%3A00%27"
+  MaxIdleConns: 10
+  MaxOpenConns: 100
+jwt:
+  secretKey: ""
+  algorithm: HS256
+  expiresIn: 24h
+  issuer: lost-found
+  audience: lost-found-clients
+  # 网页通过 HttpOnly Cookie，微信小程序通过 Authorization: Bearer。
+  cookieName: lf_access_token
+  csrfCookieName: lf_csrf
+  csrfSecretKey: ""
+aliOSS:
+  endpoint: "https://oss-cn-beijing.aliyuncs.com"
+  region: cn-beijing
+  bucketName: go-lost-found
+  # 云端凭证尚未配置，不使用占位值冒充可用凭证。
+  accessKeyId: ""
+  accessKeySecret: ""
+wechat:
+  appId: wxac7f48ae41ea7c72
+  appSecret: ""
+redis:
+  host: 127.0.0.1
+  port: 16379
+  password: ""
+  database: 0
+csrf:
+  allowedOrigins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+  # 本机使用 HTTP；HTTPS 部署时改为 true。
+  secureCookie: false
