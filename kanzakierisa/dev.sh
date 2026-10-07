@@ -18,6 +18,25 @@ ok()   { printf "  %s[OK]%s %s\n" "$C_OK"   "$C_RESET" "$1"; }
 warn() { printf "  %s[!]%s %s\n"  "$C_WARN" "$C_RESET" "$1"; }
 die()  { printf "  %s[X]%s %s\n" "$C_ERR"  "$C_RESET" "$1"; echo; exit 1; }
 
+# gen_secret 生成一个足够强的随机密钥（64 个十六进制字符）。
+#
+# 为什么需要它：.env.example 里的 JWT_SECRET 是占位值，而后端的
+# config.validate() 会**拒绝**用这个占位值启动（避免用一个人人皆知的
+# 弱密钥签发 token）。少了这一步，全新克隆下的「一键启动」会在后端
+# 启动这一环直接失败 —— 而那正是本脚本存在的意义。
+gen_secret() {
+    if command -v openssl >/dev/null 2>&1; then
+        openssl rand -hex 32
+        return
+    fi
+    if [ -r /dev/urandom ]; then
+        LC_ALL=C od -An -tx1 -N32 /dev/urandom | tr -d ' \n'
+        return
+    fi
+    # 兜底：熵很低，仅用于保证脚本不卡住；下面的 ok/warn 会如实说明。
+    printf 'WEAK_%s_%s' "$(date +%s%N 2>/dev/null || date +%s)" "$$"
+}
+
 echo
 echo "============================================================"
 echo "  校园失物招领系统 · 一键启动"
@@ -66,9 +85,22 @@ if [ ! -f server/.env ]; then
     [ -f server/.env.example ] || die "找不到 server/.env 与 server/.env.example"
     cp server/.env.example server/.env
     ok "已从 .env.example 生成 server/.env"
+
+    # 立刻替换掉占位 JWT_SECRET，否则后端起不来（见 gen_secret 的说明）。
+    SECRET="$(gen_secret)"
+    case "$SECRET" in
+        WEAK_*) warn "未能取到强随机源，JWT_SECRET 强度不足，建议手动修改 server/.env" ;;
+    esac
+    if sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=${SECRET}|" server/.env 2>/dev/null; then
+        rm -f server/.env.bak
+        ok "已写入随机 JWT_SECRET"
+    else
+        warn "自动写入 JWT_SECRET 失败，请手动修改 server/.env 后再启动"
+    fi
+
     warn "请检查 server/.env 里的 DB_PASSWORD 是否与你的 MySQL 一致"
 else
-    ok "server/.env 已存在"
+    ok "server/.env 已存在（保留现有配置）"
 fi
 
 # 读取配置（去掉可能的 CRLF 与引号）
@@ -174,7 +206,7 @@ echo
 echo "  前端：  http://localhost:5173"
 echo "  后端：  http://localhost:8080/api/health"
 echo
-echo "  测试账号（密码统一 123456，不是 123456）："
+echo "  测试账号（密码统一 123456）："
 echo "    alice / bob / carol"
 echo
 echo "  建议 F12 切到手机模式（iPhone 12 Pro），本产品为移动端优先设计。"

@@ -60,8 +60,19 @@ if not exist "server\.env" (
     )
     copy "server\.env.example" "server\.env" >nul
     echo   [OK] 已从 .env.example 生成 server\.env
+
+    REM 立刻替换掉占位的 JWT_SECRET。
+    REM 为什么必须做：后端的 config.validate() 会拒绝用 .env.example 里的
+    REM 占位密钥启动（避免用弱密钥签发 token）。少了这一步，全新克隆下的
+    REM 「一键启动」会在后端启动这一环直接失败。
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = 'server\.env'; $s = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N'); $c = [IO.File]::ReadAllText($p); $n = [regex]::Replace($c, '(?m)^JWT_SECRET=[^\r\n]*', 'JWT_SECRET=' + $s); if ($n -eq $c) { exit 1 }; [IO.File]::WriteAllText($p, $n); exit 0"
+    if errorlevel 1 (
+        echo   [!] 自动写入 JWT_SECRET 失败，请手动修改 server\.env
+    ) else (
+        echo   [OK] 已写入随机 JWT_SECRET
+    )
 ) else (
-    echo   [OK] server\.env 已存在
+    echo   [OK] server\.env 已存在（保留现有配置）
 )
 
 REM 读取 DB_PASSWORD / DB_NAME（供建库与连通性检查使用）
@@ -219,7 +230,7 @@ echo.
 echo   前端：  http://localhost:5173
 echo   后端：  http://localhost:8080/api/health
 echo.
-echo   测试账号（密码统一 123456，注意不是 123456）：
+echo   测试账号（密码统一 123456）：
 echo     alice  小明     联系方式已公开，用于演示可见性规则
 echo     bob    小红     联系方式默认隐藏
 echo     carol  管理员
