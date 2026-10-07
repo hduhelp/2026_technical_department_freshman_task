@@ -176,7 +176,9 @@ onBeforeUnmount(() => {
           <PostCard v-for="item in list" :key="item.id" :post="item" />
         </van-list>
 
-        <EmptyState v-if="!loading && !list.length" :description="emptyText" />
+        <!-- 必须排除 error：加载失败时 van-list 已经在显示「加载失败，点击重试」，
+             再叠一个「还没有帖子」就和它自相矛盾了 -->
+        <EmptyState v-if="!loading && !list.length && !error" :description="emptyText" />
       </div>
     </van-pull-refresh>
   </div>

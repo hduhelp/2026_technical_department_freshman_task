@@ -8,7 +8,7 @@
  * 未登录的情况不用在这里判断 —— `/publish` 的 `meta.requiresAuth` 已由
  * 全局守卫拦下，能渲染到这里就说明一定拿到了 token。
  */
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showSuccessToast } from 'vant'
 
@@ -19,6 +19,19 @@ const router = useRouter()
 
 const formRef = ref(null)
 const submitting = ref(false)
+
+/**
+ * 成功后延迟跳转的定时器。
+ *
+ * 必须存下来并在卸载时清掉：这个 500ms 窗口里用户完全可能自己按返回离开本页，
+ * 而定时器不会随组件消失 —— 会把人从列表页强行拽到详情页。
+ * 与 PostListPage 里 searchTimer 的处理同理。
+ */
+let redirectTimer = null
+
+onBeforeUnmount(() => {
+  if (redirectTimer) clearTimeout(redirectTimer)
+})
 
 async function onSubmit(payload) {
   if (submitting.value) return
@@ -34,7 +47,7 @@ async function onSubmit(payload) {
     showSuccessToast('发布成功')
     // 延迟 500ms 再跳转，让「发布成功」的 Toast 有时间被看见；
     // 用 replace 而非 push，避免用户从详情页返回又回到已提交的表单。
-    setTimeout(() => {
+    redirectTimer = setTimeout(() => {
       router.replace(`/posts/${post.id}`)
     }, 500)
 

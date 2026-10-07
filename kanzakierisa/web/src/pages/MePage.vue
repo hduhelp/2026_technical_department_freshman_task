@@ -40,7 +40,8 @@ const nickname = computed(
 // ==================== 数据统计 ====================
 const stats = reactive({
   posts: 0,
-  /** 认领数：P6 接口就位后接上（P5 时这里恒为「—」）。
+  /** 认领数：由 `claimApi.listMine` 的 total 填充。拿不到时保持 null，
+   *  模板会渲染成「—」，避免把「请求失败」显示成「0 条认领」。
    *  与发帖数一样只要 total，pageSize 取 1，不搬运行数据。 */
   claims: null,
 })
@@ -285,9 +286,19 @@ function onLogout() {
         <div v-for="item in list" :key="item.id" class="me-page__item">
           <PostCard :post="item" />
 
-          <!-- 卡片下的快捷操作条 -->
+          <!-- 卡片下的快捷操作条。
+               closed 是终态、后端固定返回 1007（docs/api.md 5.4），
+               所以已结束的帖子不给「编辑」入口，免得用户点进编辑页白填一屏 -->
           <div class="me-page__ops">
-            <van-button size="mini" plain type="primary" @click="goEdit(item)">编辑</van-button>
+            <van-button
+              v-if="item.status !== 'closed'"
+              size="mini"
+              plain
+              type="primary"
+              @click="goEdit(item)"
+            >
+              编辑
+            </van-button>
             <van-button size="mini" plain type="warning" @click="openStatus(item)">
               改状态
             </van-button>
@@ -297,8 +308,10 @@ function onLogout() {
         </div>
       </van-list>
 
+      <!-- 排除 error：加载失败时 van-list 已经给了「加载失败，点击重试」，
+           两个状态同屏会自相矛盾 -->
       <van-empty
-        v-if="!loading && !list.length"
+        v-if="!loading && !list.length && !error"
         image="search"
         :description="statusTab === 'all' ? '你还没有发布过帖子' : '该状态下没有帖子'"
       />

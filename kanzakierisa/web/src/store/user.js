@@ -64,5 +64,7 @@ export const useUserStore = defineStore('user', () => {
     clear()
   }
 
-  return { token, user, isLogin, setToken, clear, login, register, fetchMe, logout }
+  // 刻意不导出 `token` / `setToken`：全项目无人引用，登录态一律走 login / logout。
+  // 暴露 setToken 只会多出一条「绕开 login 直接塞 token、user 却没填」的歪路。
+  return { user, isLogin, clear, login, register, fetchMe, logout }
 })

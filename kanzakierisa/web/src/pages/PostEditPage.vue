@@ -12,7 +12,7 @@
  * 用别人的 token 直接 curl `PUT /posts/:id` 会拿到 1003 / 403。
  * 前端能做的是「别让用户白费力气」，绝不能是「安全边界」。
  */
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showSuccessToast, showToast } from 'vant'
 
@@ -25,6 +25,19 @@ const router = useRouter()
 const post = ref(null)
 const loading = ref(true)
 const submitting = ref(false)
+
+/**
+ * 成功后延迟跳转的定时器。
+ *
+ * 必须存下来并在卸载时清掉：这 300ms 里用户可能已经自己返回列表了，
+ * 定时器却照旧执行，会把用户从列表页强行带到详情页。
+ * 与 PostListPage 里 searchTimer 的处理同理。
+ */
+let redirectTimer = null
+
+onBeforeUnmount(() => {
+  if (redirectTimer) clearTimeout(redirectTimer)
+})
 
 onMounted(async () => {
   try {
@@ -54,9 +67,9 @@ async function onSubmit(payload) {
   try {
     await postApi.update(route.params.id, payload)
     showSuccessToast('修改已保存')
-    // 用 replace 回到详情页：详情页会重新 onMounted 拉一次接口，
+    // 用 replace 回到详情页：详情页会用 watch(route.params.id) 重新拉一次接口，
     // 展示的必然是后端落库后的值（也顺带覆盖了「状态被他人改动」的情况）。
-    setTimeout(() => {
+    redirectTimer = setTimeout(() => {
       router.replace(`/posts/${route.params.id}`)
     }, 300)
     return
@@ -83,8 +96,9 @@ function goBack() {
       <van-loading type="spinner" vertical>加载中…</van-loading>
     </div>
 
-    <!-- 等详情到位再挂载表单：PostForm 的 initialValue 是一次性灌入的，
-         先挂空表单再回填会让用户看到一次内容闪动。 -->
+    <!-- 等详情到位再挂载表单。PostForm 内部对 initialValue 有 immediate 的 watch，
+         异步回填本身不会丢内容；但先挂一张空表单再被灌入数据，
+         用户会看到一次「空白 → 内容」的闪动，所以这里等 loading 结束再挂。 -->
     <PostForm
       v-else-if="post"
       :initial-value="post"

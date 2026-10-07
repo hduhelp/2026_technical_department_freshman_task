@@ -15,7 +15,7 @@
  * 3. **失败静默**。匹配是锦上添花的信息，接口挂了不该在详情页弹 Toast
  *    干扰「查看/认领」这条主流程。
  */
-import { onMounted, ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import * as claimApi from '@/api/claim'
@@ -28,7 +28,15 @@ const props = defineProps({
 const router = useRouter()
 const list = ref([])
 
-onMounted(async () => {
+/**
+ * 必须 watch props.postId，不能只在 onMounted 里拉一次：
+ * `/posts/:id` 是同一条路由记录，在详情页里点一条匹配跳过去时，
+ * Vue Router 复用 PostDetailPage 的组件实例，本组件也会被原地复用、
+ * 不会重新挂载 —— 只挂 onMounted 的话区块里还留着上一帖的匹配结果。
+ *
+ * `immediate: true` 顶替首屏那一次调用，保证首屏只发一个请求。
+ */
+async function fetchMatches() {
   try {
     // 软鉴权接口：游客也能拿到，只是 contact 不外露
     const data = await claimApi.matches(props.postId)
@@ -36,7 +44,9 @@ onMounted(async () => {
   } catch {
     list.value = []
   }
-})
+}
+
+watch(() => props.postId, fetchMatches, { immediate: true })
 
 function goDetail(item) {
   const id = item?.post?.id

@@ -294,7 +294,7 @@ function goBack() {
             v-for="item in myPosts"
             :key="item.id"
             :title="item.title"
-            :label="`${statusLabel(item.status)} · 发布于 ${item.location || '未填写地点'}`"
+            :label="`${statusLabel(item.status)} · 地点：${item.location || '未填写地点'}`"
             is-link
             :class="{ 'is-active': item.id === postId }"
             @click="pick(item)"

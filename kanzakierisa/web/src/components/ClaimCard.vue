@@ -261,8 +261,10 @@ async function onRedeemBeforeClose(action) {
       </van-button>
     </div>
     <div v-else-if="isManage && isApproved" class="claim-card__ops">
+      <!-- 文案写成动作而不是状态：approved 只是「已通过、还没核销」，
+           写成「对方已核销」会让人以为不必再操作，与旁边的提示和点击行为都相反 -->
       <van-button size="small" round type="success" @click="openRedeem">
-        对方已核销
+        核销凭证码
       </van-button>
       <span class="claim-card__ops-tip">请让对方出示凭证码后核销</span>
     </div>

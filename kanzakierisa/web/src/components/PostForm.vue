@@ -152,14 +152,22 @@ const maxDate = (() => {
 })()
 
 function onHappenedConfirm(values) {
-  // van-picker-group 的 confirm 事件把子选择器的结果按顺序组成数组
-  const [dateValues, timeValues] = values
+  // van-picker-group 的 confirm 事件把**每个子选择器 confirm() 的返回值**按顺序组成数组
+  // （PickerGroup.mjs: children.map(item => item.confirm())），而 Picker.confirm() 返回的是
+  // getEventParams() 那个**对象** {selectedValues, selectedOptions, selectedIndexes}。
+  // 所以子项不是数组，必须从 .selectedValues 上取值 —— 按数组解构会永远判不成立。
+  const [dateParams, timeParams] = values || []
+
+  const dateValues = dateParams?.selectedValues
   if (Array.isArray(dateValues) && dateValues.length === 3) {
     form.dateValue = dateValues.map(String)
   }
+
+  const timeValues = timeParams?.selectedValues
   if (Array.isArray(timeValues) && timeValues.length === 2) {
     form.timeValue = timeValues.map(String)
   }
+
   showTimePicker.value = false
 }
 

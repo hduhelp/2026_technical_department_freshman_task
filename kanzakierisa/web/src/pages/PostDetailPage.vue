@@ -8,9 +8,12 @@
  *    是否返回，前端只按 `contact_visible` 渲染两种完全不同的 CTA，
  *    绝不二次判断。
  *
- * 2. **SPEC 7.3 / 07 §7 认领入口的四种互斥状态**（P6）。优先级是
+ * 2. **SPEC 7.3 / 07 §7 认领入口的四种互斥状态**（P6）。模板里的判断顺序是
  *
- *      自己是帖主  >  my_claim 存在  >  can_claim  >  登录 / 兜底
+ *      自己是帖主  >  未登录  >  my_claim 存在  >  can_claim  >  兜底
+ *
+ *    `未登录` 之所以能插在 `my_claim` 之前：游客没有 token，详情接口返回的
+ *    `my_claim` 恒为 null，两条分支不会同时命中，交换顺序也不改变结果。
  *
  *    为什么 `my_claim` 必须排在 `can_claim` **前面**：后端刻意把 `can_claim`
  *    做成了与列表接口语义一致的「静态准入判断」（found 帖、非本人、未 closed），
@@ -18,7 +21,7 @@
  *    承载。所以一个已提交申请的人 `can_claim` 依然是 true，若先判 can_claim
  *    就会把「认领审核中」错显示成「这是我的」，让用户以为没提交成功。
  */
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showImagePreview, showSuccessToast, showToast } from 'vant'
 
@@ -123,7 +126,16 @@ async function load() {
   }
 }
 
-onMounted(load)
+/**
+ * 为什么必须 watch 而不只是 onMounted：
+ * `/posts/:id` 是**同一条路由记录**，从详情页点「可能有这些匹配」跳到另一帖时，
+ * Vue Router 会复用本组件实例、只改 route.params，onMounted 不会再跑一次。
+ * 只挂 onMounted 的后果是 URL 换了、标题/描述/图片/操作栏却还是上一帖的，
+ * 「删除」「改状态」甚至会作用在错的那条帖子上。
+ *
+ * 用 `immediate: true` 顶替首屏的 onMounted：两者只留一个，避免首屏发两次详情请求。
+ */
+watch(() => route.params.id, load, { immediate: true })
 
 /** 直接打开详情链接时没有历史记录，退回首页而不是白屏 */
 function goBack() {
@@ -192,8 +204,12 @@ const proofForm = reactive({ proof: '' })
 
 /** proof 的长度上限后端按 **rune** 算（10–500 个字符），
  *  `String.length` 数的是 UTF-16 code unit，一个 emoji 会算成 2，
- *  用 `Array.from` 取码点才和后端口径一致。 */
-const proofLength = computed(() => Array.from(proofForm.proof).length)
+ *  用 `Array.from` 取码点才和后端口径一致。
+ *
+ *  必须**先 trim 再计数**：提交的是 `proofForm.proof.trim()`，后端也算 trim 后的长度。
+ *  若这里按原文计数，输入「（10 个空格）abc」前端会判成 10 字放行，
+ *  实际提交只有 3 个字，必然换回一个 1001 —— 字数提示与提交同源才不会骗用户。 */
+const proofLength = computed(() => Array.from(proofForm.proof.trim()).length)
 const proofValid = computed(() => proofLength.value >= 10 && proofLength.value <= 500)
 
 const proofTip = computed(() => {
@@ -464,7 +480,15 @@ async function copyContact() {
             text="认领管理"
             @click="goClaimManage"
           />
-          <van-action-bar-button type="primary" text="编辑" @click="goEdit" />
+          <!-- closed 是终态，后端对它的 PUT 固定返回 1007（docs/api.md 5.4）。
+               详情接口的 can_edit 只回答「是不是作者」，不含状态判断，
+               所以这里必须自己排除 closed，否则用户会白填一屏再被拒。 -->
+          <van-action-bar-button
+            v-if="post.status !== 'closed'"
+            type="primary"
+            text="编辑"
+            @click="goEdit"
+          />
           <van-action-bar-button type="warning" text="改状态" @click="openStatusFlow" />
           <van-action-bar-button type="danger" text="删除" @click="onDelete" />
         </template>

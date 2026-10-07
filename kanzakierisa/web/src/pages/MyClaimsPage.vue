@@ -18,7 +18,7 @@
  *    `GET /api/posts/:id`，并**按 post_id 去重** —— 同一个帖子可能有多条
  *    历史认领记录（被拒后重提），不去重会重复请求同一个帖子。
  */
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import * as claimApi from '@/api/claim'
@@ -103,9 +103,8 @@ async function reload() {
   await fetchPage()
 }
 
-onMounted(() => {
-  // 首屏由 van-list 挂载后自动触发一次 @load（与 MePage 同一约定）
-})
+// 首屏不在这里拉数据：van-list 挂载后会自动触发一次 `@load`（与 MePage 同一约定）。
+// 所以这里刻意没有任何 onMounted —— 写了就是一次多余的重复请求。
 
 function goBack() {
   if (window.history.state?.back) {
