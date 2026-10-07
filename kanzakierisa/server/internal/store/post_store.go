@@ -57,10 +57,10 @@ const viewerActiveClaimExistsSQL = `EXISTS(
 //
 // 分支顺序即 SPEC 7.2 的判定顺序（任一条命中即返回，后面的不再求值）：
 //
-//	1. u.id = ?                            → 请求者就是作者本人
-//	2. u.contact_public = 1 AND ? > 0      → 作者主动公开（且请求者是登录用户）
-//	3. EXISTS(claims ... approved/redeemed) → 双方存在已通过的认领关系（P6 接入）
-//	4. 其余                                 → 空串
+//  1. u.id = ?                            → 请求者就是作者本人
+//  2. u.contact_public = 1 AND ? > 0      → 作者主动公开（且请求者是登录用户）
+//  3. EXISTS(claims ... approved/redeemed) → 双方存在已通过的认领关系（P6 接入）
+//  4. 其余                                 → 空串
 //
 // ⚠️ 这里的 `? > 0` 不能省：contact_public 表达的是「对所有**登录用户**公开」，
 // 游客（viewerID = 0）不在此列。没有这个条件，一条 u.id = 0 的
@@ -425,7 +425,7 @@ func (s *PostStore) ListMatchCandidates(
 	return rows, nil
 }
 
-// UpdateStatus 以乐观锁方式更新帖子状态，返回受影响行数。
+// UpdateStatusWith 以乐观锁方式更新帖子状态，返回受影响行数。
 //
 // `AND status = ?` 是乐观锁的关键：两个并发请求同时把 open 改成
 // matched 与 closed 时，后到的那个会因为 status 已不是 open 而更新 0 行，
@@ -440,21 +440,20 @@ func (s *PostStore) ListMatchCandidates(
 // 返回 (RowsAffected, error) 而不是只返回 error：行数为 0 有「帖子不存在」
 // 与「状态已被改」两种可能，两者该映射成哪个错误码属于业务语义，
 // 交由 service 结合已查出的帖子判断，store 不越权下结论。
-func (s *PostStore) UpdateStatus(ctx context.Context, postID int64, from, to string, now time.Time) (int64, error) {
-	return s.updateStatus(ctx, s.db, postID, from, to, now)
-}
-
-// UpdateStatusWith 是 UpdateStatus 的「句柄由调用方指定」版本。
 //
-// 用途：P6 的「审核通过 → 帖子自动置 matched」「核销 → 帖子自动置 closed」
-// 必须与 claims 的更新在**同一个事务**里提交。若这里改走连接池，
+// 句柄由调用方指定：P6 的「审核通过 → 帖子自动置 matched」「核销 → 帖子自动
+// 置 closed」必须与 claims 的更新在**同一个事务**里提交。若这里改走连接池，
 // 会出现两种脏状态：claims 写成功了但帖子没改（认领通过了帖子还在招领），
-// 或者反过来。这些状态对用户是可见的，且无法自动修复。
+// 或者反过来 —— 这些状态对用户可见，且无法自动修复。
+//
+// 这个方法是**唯一**的状态写入入口（作者手动流转传 tx = nil，由 Handle 退化成
+// 连接池）。刻意不再提供「只走连接池」的孪生方法：两个入口意味着两条执行路径，
+// 而状态写入恰恰是最不能出现路径差异的地方。
 func (s *PostStore) UpdateStatusWith(ctx context.Context, q Querier, postID int64, from, to string, now time.Time) (int64, error) {
 	return s.updateStatus(ctx, q, postID, from, to, now)
 }
 
-// updateStatus 是 UpdateStatus / UpdateStatusTx 共用的实现。
+// updateStatus 是 UpdateStatusWith 的实现。
 func (s *PostStore) updateStatus(ctx context.Context, q Querier, postID int64, from, to string, now time.Time) (int64, error) {
 	const query = `
 		UPDATE posts
@@ -470,19 +469,4 @@ func (s *PostStore) updateStatus(ctx context.Context, q Querier, postID int64, f
 		return 0, fmt.Errorf("读取状态更新影响行数失败: %w", err)
 	}
 	return n, nil
-}
-
-// Exists 判断帖子是否存在。
-//
-// 返回 bool 而非 error 是刻意的：调用方（如详情接口）需要区分
-// 「帖子不存在」与「查询本身失败」两种截然不同的响应，
-// 用 error 表达存在性会让这两者混在一起。
-func (s *PostStore) Exists(ctx context.Context, id int64) (bool, error) {
-	const query = `SELECT EXISTS(SELECT 1 FROM posts WHERE id = ?)`
-
-	var exists bool
-	if err := s.db.GetContext(ctx, &exists, query, id); err != nil {
-		return false, fmt.Errorf("检查帖子是否存在失败: %w", err)
-	}
-	return exists, nil
 }

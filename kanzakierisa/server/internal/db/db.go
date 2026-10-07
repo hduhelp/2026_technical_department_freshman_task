@@ -6,7 +6,6 @@ package db
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"time"
@@ -75,6 +74,3 @@ func Close(pool *sqlx.DB) error {
 	}
 	return pool.Close()
 }
-
-// 编译期断言：确保导入的 database/sql 在本包内被使用（供 scan 辅助函数签名使用）。
-var _ = sql.ErrNoRows

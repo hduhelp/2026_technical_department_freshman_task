@@ -1,7 +1,8 @@
 // Package apperr 定义全局业务错误类型与错误码表。
 //
 // 设计要点：handler / service / store 三层统一返回 *Error，
-// 由 Gin 中间件（middleware.ErrorHandler）集中翻译成 HTTP 响应，
+// 由 handler 层的 response.Fail 集中翻译成 HTTP 响应
+// （它内部走 FromError：业务错误原样透出，其余收敛为 5000），
 // 业务代码里不再散落 c.JSON(...) 拼错误结构。
 package apperr
 

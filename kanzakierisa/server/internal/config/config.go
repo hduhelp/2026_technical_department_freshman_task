@@ -7,6 +7,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"strconv"
@@ -53,10 +54,11 @@ func (c *Config) UploadMaxBytes() int64 {
 // 关键项（DB_HOST / DB_PORT / DB_USER / DB_NAME / JWT_SECRET）缺失时返回错误，
 // 由 main 打印后退出。其余项缺失时回落 SPEC 第 5 章的默认值。
 func Load() (*Config, error) {
-	// .env 不存在属于正常情况（例如 CI 或容器内直接用环境变量），不视为错误。
+	// .env 不存在属于正常情况（例如 CI 或容器内直接用环境变量），不视为错误；
+	// 但「文件存在却解析失败」必须留下痕迹 —— 那种情况下配置会静默地退回
+	// 环境变量或默认值，表现为一次莫名其妙的「我明明改了 .env 却没生效」。
 	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
-		// 仅当文件存在但解析失败时才需要提醒；这里统一忽略，交由下方必填校验兜底。
-		_ = err
+		slog.Warn("加载 .env 失败，将只使用进程环境变量", "error", err)
 	}
 
 	cfg := &Config{

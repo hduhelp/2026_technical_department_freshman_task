@@ -9,6 +9,7 @@ import (
 	"regexp"
 
 	"hdu-lostfound/internal/pkg/apperr"
+	"hdu-lostfound/internal/pkg/password"
 )
 
 // usernamePattern 是用户名的合法字符集与长度约束（SPEC 02 第 5 节）。
@@ -18,11 +19,11 @@ import (
 // 无歧义地输入，中文会引入编码与全半角问题；展示名交给 nickname。
 var usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,32}$`)
 
-// 口令长度约束（SPEC 02 第 5 节）。
-const (
-	minPasswordLen = 6  // 下界：6 位
-	maxPasswordLen = 64 // 上界：64 位（bcrypt 72 字节截断，留出余量）
-)
+// minPasswordLen 是口令长度下界（SPEC 02 第 5 节）。
+//
+// 上界不在这里再写一份：它由 bcrypt 的 72 字节截断决定，收口在
+// password.MaxPlainLength —— 两处各写一个 64，改一处就会漏另一处。
+const minPasswordLen = 6
 
 // 昵称 / 联系方式的长度上界，与 users 表的列宽一致。
 const (
@@ -43,10 +44,13 @@ func validateUsername(username string) error {
 //
 // 不限制字符集（允许特殊符号与空格），只卡长度 ——
 // 强制复杂度规则反而会促使用户选择可预测的变形，长度是更有效的强度指标。
-func validatePassword(password string) error {
-	if len(password) < minPasswordLen || len(password) > maxPasswordLen {
+//
+// 长度按**字节**计（与 bcrypt 的 72 字节截断口径一致，不是 rune）：
+// 一个 30 字的中文口令是 90 字节，这里判超长是正确行为。
+func validatePassword(plain string) error {
+	if len(plain) < minPasswordLen || len(plain) > password.MaxPlainLength {
 		return apperr.Newf(apperr.CodeInvalidParam,
-			"密码长度需为 6–64 位")
+			"密码长度需为 %d–%d 位", minPasswordLen, password.MaxPlainLength)
 	}
 	return nil
 }

@@ -230,9 +230,11 @@ func parseIDParam(c *gin.Context, name string) (int64, bool) {
 //
 // inList 由调用方指定：列表接口需要把 author.contact 一律留空。
 //
-// HasApprovedClaim 在 P2 阶段恒为 false —— 它依赖 claims 表的查询，
-// 属于 P6 的职责。此处显式写明而不是隐去，是为了让后续接入时
-// 能一眼看到「这里有个待补的口子」，而不是以为规则已经完整。
+// ⚠️ 这里**不设置**「请求者在本帖下是否存在已通过的认领」：PostView 上
+// 刻意没有这个字段（P2 的占位已在 P6 移除）。认领关系由 post_store 的
+// SQL 直接算进实体的 ViewerHasApprovedClaim，从而与 author_contact 出自
+// 同一条语句；若 View 上再留一个同义字段就会出现两个来源，
+// 一旦只设置了其中一个，contact_visible 与 contact 就会互相矛盾。
 func viewOf(c *gin.Context, inList bool) model.PostView {
 	view := model.PostView{InList: inList}
 	if u := middleware.CurrentUser(c); u != nil {

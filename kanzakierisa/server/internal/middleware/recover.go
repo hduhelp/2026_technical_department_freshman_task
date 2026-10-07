@@ -3,7 +3,6 @@ package middleware
 
 import (
 	"log/slog"
-	"net/http"
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
@@ -34,8 +33,11 @@ func Recover() gin.HandlerFunc {
 					return
 				}
 
+				// response.Fail 内部已按业务码写出 500 并落盘响应体，
+				// 这里只需中断后续 handler —— 再调一次 AbortWithStatus
+				// 是无用的（响应头已发出，gin 会直接忽略并打一条 debug 警告）。
 				response.Fail(c, apperr.New(apperr.CodeInternal))
-				c.AbortWithStatus(http.StatusInternalServerError)
+				c.Abort()
 			}
 		}()
 

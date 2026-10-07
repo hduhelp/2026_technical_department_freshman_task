@@ -4,10 +4,15 @@
 //
 //	{ "code": 0, "message": "ok", "data": ... }
 //
-// handler 只调用本包的 OK / Page / Fail，不自行拼裸结构。
+// 列表类接口的 data 形状由 pagination.Page.Result 组装（含 list/page/pageSize/total），
+// 本包只负责「把信封写出去」这一件事。
+//
+// handler 只调用本包的 OK / OKEmpty / Fail，不自行拼裸结构。
 package response
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 
 	"hdu-lostfound/internal/pkg/apperr"
@@ -23,17 +28,15 @@ type Body struct {
 	Data    any    `json:"data"`    // 业务数据，可为 null
 }
 
-// ListData 是列表类接口统一的 data 形状。
-type ListData struct {
-	List     any   `json:"list"`     // 当前页数据
-	Page     int   `json:"page"`     // 当前页码，从 1 开始
-	PageSize int   `json:"pageSize"` // 每页条数
-	Total    int64 `json:"total"`    // 满足条件的总条数
-}
-
 // OK 返回成功响应，data 为业务数据（可为 nil，此时 JSON 中为 null）。
+//
+// ⚠️ 第一个参数必须是 **HTTP 状态码**，不能想当然地传 apperr.CodeOK：
+// 业务码 0 不是一个合法的 HTTP 状态码。gin 的 responseWriter.WriteHeader
+// 内部有 `if code > 0` 的兜底，传 0 时它会静默保留默认的 200 ——
+// 也就是说写错了也能跑通，只在日志与实际状态码上留下难以察觉的偏差。
+// 这里显式写 http.StatusOK，让正确性由代码表达，而不是由库的兜底表达。
 func OK(c *gin.Context, data any) {
-	c.JSON(apperr.CodeOK, Body{
+	c.JSON(http.StatusOK, Body{
 		Code:    apperr.CodeOK,
 		Message: "ok",
 		Data:    data,
@@ -43,20 +46,6 @@ func OK(c *gin.Context, data any) {
 // OKEmpty 返回成功响应且 data 为 null，用于登出、删除等无返回体的操作。
 func OKEmpty(c *gin.Context) {
 	OK(c, nil)
-}
-
-// Page 返回分页列表响应。list 为 nil 时会被规范化为空切片，
-// 保证前端拿到的始终是数组而非 null。
-func Page(c *gin.Context, list any, page, pageSize int, total int64) {
-	if list == nil {
-		list = []any{}
-	}
-	OK(c, ListData{
-		List:     list,
-		Page:     page,
-		PageSize: pageSize,
-		Total:    total,
-	})
 }
 
 // Fail 按业务错误写出对应 HTTP 状态码与统一错误响应体。
