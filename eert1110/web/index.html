@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>失物招领平台</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>🔍 失物招领平台</h1>
+      <div id="auth-area"></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- 登录 / 注册 -->
+    <section id="auth-panel" class="card hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="login">登录</button>
+        <button class="tab" data-tab="register">注册</button>
+      </div>
+      <div class="form-row">
+        <input id="auth-username" type="text" placeholder="用户名（3~32 字符）" autocomplete="username">
+      </div>
+      <div class="form-row">
+        <input id="auth-password" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password">
+      </div>
+      <div class="form-row">
+        <button class="btn primary" id="btn-auth-submit">登录</button>
+      </div>
+      <p class="hint">登录后即可发布、编辑和管理自己的遗失物信息。</p>
+    </section>
+
+    <!-- 发布 / 编辑遗失物 -->
+    <section id="create-panel" class="card hidden">
+      <h2 id="create-title">发布遗失物</h2>
+      <form id="item-form">
+        <div class="form-row">
+          <label>类型</label>
+          <div class="radio-group">
+            <label><input type="radio" name="category" value="lost" checked> 寻物启事（我丢了东西）</label>
+            <label><input type="radio" name="category" value="found"> 招领启事（我捡到东西）</label>
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="f-title">标题 *</label>
+          <input id="f-title" type="text" placeholder="例如：黑色钱包一个" maxlength="120">
+        </div>
+        <div class="form-row">
+          <label for="f-desc">基本信息 / 详细描述</label>
+          <textarea id="f-desc" rows="3" placeholder="物品特征、外观、内含物品等"></textarea>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="f-location">地点</label>
+            <input id="f-location" type="text" placeholder="例如：图书馆三楼">
+          </div>
+          <div>
+            <label for="f-lost_at">遗失 / 捡到日期</label>
+            <input id="f-lost_at" type="date">
+          </div>
+        </div>
+        <hr>
+        <h3>联系方式</h3>
+        <div class="form-row two-col">
+          <div>
+            <label for="f-name">联系人姓名 *</label>
+            <input id="f-name" type="text" placeholder="您的称呼">
+          </div>
+          <div>
+            <label for="f-phone">电话</label>
+            <input id="f-phone" type="text" placeholder="至少填一种联系方式">
+          </div>
+        </div>
+        <div class="form-row two-col">
+          <div>
+            <label for="f-wechat">微信</label>
+            <input id="f-wechat" type="text" placeholder="微信号">
+          </div>
+          <div>
+            <label for="f-email">邮箱</label>
+            <input id="f-email" type="text" placeholder="邮箱地址">
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="f-message">备注</label>
+          <input id="f-message" type="text" placeholder="其他说明（可选）">
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">提交</button>
+          <button type="button" class="btn" id="btn-cancel-edit">取消</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 筛选栏 -->
+    <section id="filter-bar" class="card">
+      <select id="filter-category">
+        <option value="">全部类型</option>
+        <option value="lost">寻物启事</option>
+        <option value="found">招领启事</option>
+      </select>
+      <select id="filter-status">
+        <option value="">全部状态</option>
+        <option value="unclaimed">未领取</option>
+        <option value="claimed">已领取</option>
+      </select>
+      <input id="filter-keyword" type="text" placeholder="搜索标题 / 描述 / 地点">
+    </section>
+
+    <!-- 遗失物列表（主界面） -->
+    <section id="item-list"></section>
+  </main>
+
+  <div id="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
