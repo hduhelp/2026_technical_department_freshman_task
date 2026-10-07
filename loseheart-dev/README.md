@@ -16,11 +16,52 @@
 
 ## 实际运行截图
 
+以下截图来自本地浏览器和微信开发者工具模拟器，使用真实后端接口及演示数据。截图展示运行页面，设计稿单独保存在 `design/`。
+
+### 用户网页
+
+带图寻物/拾物列表，支持类型、校区和日期筛选：
+
 ![用户网页带图列表](frontend/evidence/seeded-home.png)
+
+本人帖子详情：显示物品照片、联系方式，以及“通过 → 退回修改 → 重审通过”的历史；下方提供完成、编辑和撤回入口。
+
+![用户帖子详情与审核历史](frontend/evidence/user-post.png)
+
+### 管理网页
+
+待审核队列：按审核决定和帖子 ID 查询，进入详情后处理：
 
 ![管理端待审核列表](frontend/evidence/seeded-review-queue.png)
 
-![微信开发者工具模拟器](frontend/evidence/mini-final.jpg)
+审核详情中的物品内容、联系方式与只读状态。已经处理的记录不会再次显示可提交的审核操作：
+
+![管理端审核详情与只读状态](frontend/evidence/admin-review.png)
+
+### 微信小程序
+
+模拟器中的首页、个人中心、审核通知及真实投稿成功页面：
+
+<table>
+  <tr>
+    <th>首页与带图帖子</th>
+    <th>我的帖子与共用额度</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="frontend/evidence/mini-final.jpg" alt="微信模拟器首页与带图帖子" width="300"></td>
+    <td valign="top"><img src="frontend/evidence/mini-mine.jpg" alt="小程序个人中心与每日发布额度" width="300"></td>
+  </tr>
+  <tr>
+    <th>审核结果通知</th>
+    <th>发布后提交审核成功</th>
+  </tr>
+  <tr>
+    <td valign="top"><img src="frontend/evidence/mini-notifications.jpg" alt="小程序审核通知列表" width="300"></td>
+    <td valign="top"><img src="frontend/evidence/mini-publish-success.jpg" alt="小程序真实投稿后的已提交审核结果" width="300"></td>
+  </tr>
+</table>
+
+完整截图文件保存在 [frontend/evidence](frontend/evidence)，流程验证与未实测边界见 [验证记录](frontend/VERIFICATION.md)。截图中的额度、未读数和审核状态对应各自截图时刻。
 
 图片、联系人和帖子描述为本地演示素材。演示批次包含寻物 6 条、拾物 6 条和 14 条审核记录，其中包含退回后补充重审；[批次清单](frontend/evidence/seeded-posts-20261007.json)保存记录 ID 与随机演示联系方式。数据库和私有 OSS 对象没有随代码打包，新环境不会自动出现本机业务记录。
 
