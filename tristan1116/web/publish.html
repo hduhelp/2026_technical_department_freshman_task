@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发布 · 校园失物招领系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="topbar">
+    <span class="back" onclick="history.back()">‹</span>
+    <h1 id="pageTitle">发布信息</h1>
+  </div>
+
+  <div class="form">
+
+    <!-- 类型：两个大按钮（编辑时锁定） -->
+    <div class="field">
+      <label>我要做什么 <span class="hint" id="typeHint"></span></label>
+      <div class="type-picker" id="typePicker"></div>
+    </div>
+
+    <!-- 物品名称 -->
+    <div class="field">
+      <label>物品名称 <span class="hint">必填</span></label>
+      <input class="input" id="title" maxlength="64" placeholder="例如：校园卡、黑色耳机">
+    </div>
+
+    <!-- 分类：图标网格 -->
+    <div class="field">
+      <label>物品分类 <span class="hint">必选</span></label>
+      <div class="cat-grid" id="catGrid"></div>
+    </div>
+
+    <!-- 校区 + 地点 -->
+    <div class="field">
+      <label>校区</label>
+      <select class="select" id="campus">
+        <option value="">请选择校区</option>
+        <option value="下沙校区">下沙校区</option>
+        <option value="文一校区">文一校区</option>
+        <option value="青山湖校区">青山湖校区</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>具体地点</label>
+      <input class="input" id="place" maxlength="64" placeholder="例如：图书馆二楼、三食堂">
+    </div>
+
+    <!-- 时间 -->
+    <div class="field">
+      <label id="timeLabel">丢失时间 <span class="hint">必填</span></label>
+      <input class="input" id="happenedAt" type="datetime-local">
+    </div>
+
+    <!-- 描述 -->
+    <div class="field">
+      <label>详细描述 <span class="hint">选填</span></label>
+      <textarea class="textarea" id="description" maxlength="500"
+        placeholder="补充特征、颜色、里面有什么东西…越详细越容易找回"></textarea>
+    </div>
+
+    <!-- 联系方式 -->
+    <div class="field">
+      <label>联系方式 <span class="hint">必填，仅登录用户可见</span></label>
+      <input class="input" id="contact" maxlength="100" placeholder="微信号 / QQ 号 / 手机号">
+      <div style="font-size:12px;color:var(--text-light);margin-top:6px">
+        🔒 不会展示在列表和详情里，只有登录的同学点「查看联系方式」才能看到
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="submitBtn">发布</button>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/publish.js"></script>
+</body>
+</html>

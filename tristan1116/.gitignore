@@ -1,0 +1,13 @@
+# 本地配置（含数据库密码，绝不能提交）
+config.yaml
+
+# 编译产物
+*.exe
+lostfound
+
+# 部署产物（Linux 二进制 + 线上配置，含密码）
+dist/
+
+# 编辑器
+.idea/
+.vscode/

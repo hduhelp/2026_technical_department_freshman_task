@@ -1,0 +1,652 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "校园失物招领系统 API",
+    "description": "杭电助手技术部二面任务 · 前后端开发赛道\n\n统一响应格式：{ code, message, data }，code = 0 表示成功。\n\n错误码：1001 参数错误 / 1002 未登录或 token 无效 / 1003 无权限 / 1004 资源不存在 / 1005 用户名已被注册 / 1006 用户名或密码错误 / 1007 状态不能回退 / 1008 服务器内部错误\n\n登录接口返回的 token 需放在请求头：Authorization: Bearer <token>",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "本地开发环境"
+    }
+  ],
+  "tags": [
+    {
+      "name": "认证",
+      "description": "注册 / 登录 / 获取当前用户 / 退出登录"
+    },
+    {
+      "name": "物品",
+      "description": "失物招领帖：发布、浏览、搜索、编辑、状态管理、删除"
+    }
+  ],
+  "paths": {
+    "/api/auth/register": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "用户注册",
+        "description": "用户名唯一；密码至少 6 位。注册成功后返回用户信息（不含密码）。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" },
+              "example": {
+                "username": "tongshixuan",
+                "password": "123456",
+                "nickname": "童诗轩",
+                "student_id": "23051101"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResp" },
+                "example": {
+                  "code": 0,
+                  "message": "注册成功",
+                  "data": {
+                    "id": 1,
+                    "username": "tongshixuan",
+                    "nickname": "童诗轩",
+                    "student_id": "23051101",
+                    "created_at": "2026-10-06T11:33:50.788+08:00"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误（1001）或用户名已被注册（1005）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1005, "message": "用户名已被注册", "data": null }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "用户登录",
+        "description": "返回 token（有效期 7 天）和用户信息。后续需要登录的接口在请求头带上：Authorization: Bearer <token>",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": { "username": "tongshixuan", "password": "123456" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "登录成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginResp" },
+                "example": {
+                  "code": 0,
+                  "message": "登录成功",
+                  "data": {
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxfQ.xxx",
+                    "user": {
+                      "id": 1,
+                      "username": "tongshixuan",
+                      "nickname": "童诗轩",
+                      "student_id": "23051101",
+                      "created_at": "2026-10-06T11:33:50.788+08:00"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "用户名或密码错误（1006）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1006, "message": "用户名或密码错误", "data": null }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["认证"],
+        "summary": "获取当前用户",
+        "description": "前端用来判断\"我是谁\"（比如显示昵称、进入\"我的发布\"）。",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "当前登录用户的信息",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResp" }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录或 token 无效（1002）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1002, "message": "请先登录", "data": null }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["认证"],
+        "summary": "退出登录",
+        "description": "JWT 是无状态的：token 签发后服务端无法单方面作废。此接口返回成功，前端需自行删除本地保存的 token。",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": {
+            "description": "退出成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": {
+                  "code": 0,
+                  "message": "已退出登录（前端请删除本地保存的 token）",
+                  "data": null
+                }
+              }
+            }
+          },
+          "401": { "description": "未登录（1002）" }
+        }
+      }
+    },
+    "/api/items": {
+      "get": {
+        "tags": ["物品"],
+        "summary": "信息列表（搜索 / 筛选 / 分页）",
+        "description": "公开接口，无需登录。默认只返回\"寻找中\"的信息，按发布时间倒序。\n\n返回的每条信息**不含联系方式** —— 查看联系方式请调用 GET /api/items/{id}/contact（需登录）。",
+        "parameters": [
+          { "name": "keyword", "in": "query", "description": "关键词，模糊匹配物品名称和描述（LIKE）", "schema": { "type": "string" }, "example": "校园卡" },
+          { "name": "type", "in": "query", "description": "类型筛选", "schema": { "type": "string", "enum": ["lost", "found"] } },
+          { "name": "category", "in": "query", "description": "分类筛选", "schema": { "type": "string", "enum": ["card", "electronics", "books", "clothing", "daily", "other"] } },
+          { "name": "campus", "in": "query", "description": "校区筛选（精确匹配）", "schema": { "type": "string" }, "example": "下沙校区" },
+          { "name": "place", "in": "query", "description": "地点筛选（模糊匹配）", "schema": { "type": "string" }, "example": "图书馆" },
+          { "name": "status", "in": "query", "description": "状态筛选。不传默认只看 searching；传 all 表示不限", "schema": { "type": "string", "enum": ["all", "searching", "resolved", "closed"] } },
+          { "name": "page", "in": "query", "description": "页码，从 1 开始", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "description": "每页条数，1~50，默认 10", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ItemListResp" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": {
+                    "list": [
+                      {
+                        "id": 4,
+                        "type": "lost",
+                        "title": "校园卡",
+                        "category": "card",
+                        "campus": "下沙校区",
+                        "place": "图书馆二楼",
+                        "happened_at": "2026-10-05T14:30:00+08:00",
+                        "description": "黑色卡套，里面有校园卡和饭卡",
+                        "image_url": "",
+                        "status": "searching",
+                        "user_id": 3,
+                        "created_at": "2026-10-06T11:33:51.132+08:00",
+                        "updated_at": "2026-10-06T11:33:51.132+08:00"
+                      }
+                    ],
+                    "total": 3,
+                    "page": 1,
+                    "page_size": 10
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["物品"],
+        "summary": "发布信息",
+        "description": "需登录。status 固定为 searching（由后端设置），发布者取当前登录用户。\n\nhappened_at 支持多种格式：2026-10-05 14:30 / 2026-10-05T14:30 / 2026-10-05 14:30:00 / 2026-10-05",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateItemRequest" },
+              "example": {
+                "type": "lost",
+                "title": "校园卡",
+                "category": "card",
+                "campus": "下沙校区",
+                "place": "图书馆二楼",
+                "happened_at": "2026-10-05 14:30",
+                "description": "黑色卡套，里面有校园卡和饭卡，捡到请联系我",
+                "contact": "微信 xiaoming123"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "发布成功（返回的 data 不含 contact）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ItemResp" }
+              }
+            }
+          },
+          "400": { "description": "参数错误（1001）" },
+          "401": { "description": "未登录（1002）" }
+        }
+      }
+    },
+    "/api/items/my": {
+      "get": {
+        "tags": ["物品"],
+        "summary": "我的发布",
+        "description": "需登录。返回当前用户发布的所有信息（**含全部状态**，方便管理）。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ItemListResp" } }
+            }
+          },
+          "401": { "description": "未登录（1002）" }
+        }
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "tags": ["物品"],
+        "summary": "信息详情",
+        "description": "公开接口。返回里多了发布者昵称和学号（详情页展示用），但**依然不含联系方式**。",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "description": "信息 ID", "schema": { "type": "integer" }, "example": 4 }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ItemDetailResp" },
+                "example": {
+                  "code": 0,
+                  "message": "ok",
+                  "data": {
+                    "id": 4,
+                    "type": "lost",
+                    "title": "校园卡",
+                    "category": "card",
+                    "campus": "下沙校区",
+                    "place": "图书馆二楼",
+                    "happened_at": "2026-10-05T14:30:00+08:00",
+                    "description": "黑色卡套，里面有校园卡和饭卡",
+                    "image_url": "",
+                    "status": "searching",
+                    "user_id": 3,
+                    "created_at": "2026-10-06T11:33:51.132+08:00",
+                    "updated_at": "2026-10-06T11:33:51.132+08:00",
+                    "publisher_nickname": "演示用户",
+                    "publisher_student_id": "23051101"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "id 不合法（1001）" },
+          "404": {
+            "description": "信息不存在（1004）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1004, "message": "信息不存在", "data": null }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["物品"],
+        "summary": "编辑信息（仅本人）",
+        "description": "需登录且必须是发布者本人。所有字段选填，传了才改。\n\n⚠️ 本接口**不能修改状态** —— 状态变更请用 PATCH /api/items/{id}/status。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 4 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateItemRequest" },
+              "example": { "description": "黑色卡套，已补图" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "修改成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ItemResp" } } } },
+          "400": { "description": "参数错误（1001）" },
+          "401": { "description": "未登录（1002）" },
+          "403": {
+            "description": "不是本人发布（1003）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1003, "message": "只能操作自己发布的信息", "data": null }
+              }
+            }
+          },
+          "404": { "description": "信息不存在（1004）" }
+        }
+      },
+      "delete": {
+        "tags": ["物品"],
+        "summary": "删除信息（仅本人）",
+        "description": "需登录且必须是发布者本人。前端应做二次确认。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 4 }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 0, "message": "删除成功", "data": null }
+              }
+            }
+          },
+          "401": { "description": "未登录（1002）" },
+          "403": { "description": "不是本人发布（1003）" },
+          "404": { "description": "信息不存在（1004）" }
+        }
+      }
+    },
+    "/api/items/{id}/contact": {
+      "get": {
+        "tags": ["物品"],
+        "summary": "查看联系方式（需登录）",
+        "description": "★ 本项目的关键设计：联系方式在列表和详情里**一律不返回**，唯一出口就是这个接口。\n\n未登录访问返回 401 —— 对应 PRD「登录后可见联系方式」。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 4 }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ContactResp" },
+                "example": { "code": 0, "message": "ok", "data": { "contact": "微信 xiaoming123" } }
+              }
+            }
+          },
+          "401": {
+            "description": "未登录（1002）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1002, "message": "请先登录", "data": null }
+              }
+            }
+          },
+          "404": { "description": "信息不存在（1004）" }
+        }
+      }
+    },
+    "/api/items/{id}/status": {
+      "patch": {
+        "tags": ["物品"],
+        "summary": "修改状态（仅本人，只能前进）",
+        "description": "状态机：searching（寻找中）→ resolved（已找到）→ closed（已结束），**只能前进不能回退**。\n\n招领帖的界面文案做同义适配：searching = 待认领，resolved = 已认领。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 4 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateStatusRequest" },
+              "example": { "status": "resolved" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "状态已更新",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 0, "message": "状态已更新", "data": null }
+              }
+            }
+          },
+          "400": {
+            "description": "状态回退或非法状态（1001 / 1007）",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FailResp" },
+                "example": { "code": 1007, "message": "状态只能前进，不能回退", "data": null }
+              }
+            }
+          },
+          "401": { "description": "未登录（1002）" },
+          "403": { "description": "不是本人发布（1003）" },
+          "404": { "description": "信息不存在（1004）" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "登录接口返回的 token，格式：Bearer <token>"
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 3, "maxLength": 20, "description": "用户名（唯一，登录用）", "example": "tongshixuan" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 32, "description": "密码", "example": "123456" },
+          "nickname": { "type": "string", "maxLength": 32, "description": "昵称（选填，不填则展示用户名）", "example": "童诗轩" },
+          "student_id": { "type": "string", "maxLength": 32, "description": "学号（选填）", "example": "23051101" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "example": "tongshixuan" },
+          "password": { "type": "string", "example": "123456" }
+        }
+      },
+      "CreateItemRequest": {
+        "type": "object",
+        "required": ["type", "title", "category", "happened_at", "contact"],
+        "properties": {
+          "type": { "type": "string", "enum": ["lost", "found"], "description": "lost = 失物（我丢了），found = 招领（我捡到）" },
+          "title": { "type": "string", "maxLength": 64, "description": "物品名称", "example": "校园卡" },
+          "category": { "type": "string", "enum": ["card", "electronics", "books", "clothing", "daily", "other"], "description": "分类：证件卡类 / 电子设备 / 书籍资料 / 衣物配饰 / 生活用品 / 其他" },
+          "campus": { "type": "string", "maxLength": 32, "description": "校区", "example": "下沙校区" },
+          "place": { "type": "string", "maxLength": 64, "description": "具体地点", "example": "图书馆二楼" },
+          "happened_at": { "type": "string", "description": "丢失/捡到时间，支持 2026-10-05 14:30 等多种格式", "example": "2026-10-05 14:30" },
+          "description": { "type": "string", "maxLength": 500, "description": "描述（选填）" },
+          "contact": { "type": "string", "maxLength": 100, "description": "联系方式（微信 / QQ / 手机号）。★ 不会出现在列表和详情里，仅登录用户可通过 /contact 接口查看", "example": "微信 xiaoming123" }
+        }
+      },
+      "UpdateItemRequest": {
+        "type": "object",
+        "description": "全部选填，传了才改。注意：没有 status 字段（状态走专门接口）",
+        "properties": {
+          "title": { "type": "string", "maxLength": 64 },
+          "category": { "type": "string", "enum": ["card", "electronics", "books", "clothing", "daily", "other"] },
+          "campus": { "type": "string", "maxLength": 32 },
+          "place": { "type": "string", "maxLength": 64 },
+          "happened_at": { "type": "string" },
+          "description": { "type": "string", "maxLength": 500 },
+          "contact": { "type": "string", "maxLength": 100 }
+        }
+      },
+      "UpdateStatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["searching", "resolved", "closed"], "description": "searching = 寻找中，resolved = 已找到，closed = 已结束" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 1 },
+          "username": { "type": "string", "example": "tongshixuan" },
+          "nickname": { "type": "string", "example": "童诗轩" },
+          "student_id": { "type": "string", "example": "23051101" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "description": "失物/招领帖。注意：**不含 contact 字段**（设计如此）",
+        "properties": {
+          "id": { "type": "integer", "example": 4 },
+          "type": { "type": "string", "enum": ["lost", "found"] },
+          "title": { "type": "string", "example": "校园卡" },
+          "category": { "type": "string", "enum": ["card", "electronics", "books", "clothing", "daily", "other"] },
+          "campus": { "type": "string", "example": "下沙校区" },
+          "place": { "type": "string", "example": "图书馆二楼" },
+          "happened_at": { "type": "string", "format": "date-time" },
+          "description": { "type": "string" },
+          "image_url": { "type": "string", "description": "图片地址（P1 预留，暂未使用）" },
+          "status": { "type": "string", "enum": ["searching", "resolved", "closed"] },
+          "user_id": { "type": "integer", "description": "发布者 ID" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ItemDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Item" },
+          {
+            "type": "object",
+            "properties": {
+              "publisher_nickname": { "type": "string", "description": "发布者昵称", "example": "演示用户" },
+              "publisher_student_id": { "type": "string", "description": "发布者学号（若填了）", "example": "23051101" }
+            }
+          }
+        ]
+      },
+      "ItemListData": {
+        "type": "object",
+        "properties": {
+          "list": { "type": "array", "items": { "$ref": "#/components/schemas/Item" } },
+          "total": { "type": "integer", "description": "符合条件的总条数（前端用来判断还有没有下一页）", "example": 3 },
+          "page": { "type": "integer", "example": 1 },
+          "page_size": { "type": "integer", "example": 10 }
+        }
+      },
+      "LoginData": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "description": "JWT，有效期 7 天" },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "ContactData": {
+        "type": "object",
+        "properties": {
+          "contact": { "type": "string", "example": "微信 xiaoming123" }
+        }
+      },
+      "FailResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer" },
+          "message": { "type": "string" },
+          "data": { "nullable": true }
+        }
+      },
+      "UserResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "LoginResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "登录成功" },
+          "data": { "$ref": "#/components/schemas/LoginData" }
+        }
+      },
+      "ItemResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "发布成功" },
+          "data": { "$ref": "#/components/schemas/Item" }
+        }
+      },
+      "ItemDetailResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/ItemDetail" }
+        }
+      },
+      "ItemListResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/ItemListData" }
+        }
+      },
+      "ContactResp": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "integer", "example": 0 },
+          "message": { "type": "string", "example": "ok" },
+          "data": { "$ref": "#/components/schemas/ContactData" }
+        }
+      }
+    }
+  }
+}

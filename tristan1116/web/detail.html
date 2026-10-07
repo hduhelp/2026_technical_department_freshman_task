@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>详情 · 校园失物招领系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- 顶部栏 -->
+  <div class="topbar">
+    <span class="back" onclick="history.back()">‹</span>
+    <h1>详情</h1>
+  </div>
+
+  <!-- 内容区（由 JS 渲染） -->
+  <div id="content">
+    <div class="loading">加载中…</div>
+  </div>
+
+  <!-- 底部操作区（由 JS 渲染） -->
+  <div class="bottom-actions" id="actions" style="display:none"></div>
+
+  <script src="js/api.js"></script>
+  <script src="js/detail.js"></script>
+</body>
+</html>
