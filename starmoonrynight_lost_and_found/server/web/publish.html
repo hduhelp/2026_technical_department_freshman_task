@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>发布信息 · 失物招领</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page-md">
+  <div class="page-title" id="pageTitle">发布信息</div>
+
+  <div class="card">
+    <div class="form-tip">提示：标题写清「颜色 + 物品 + 特征物」更容易被搜到，例如「黑色 蓝牙耳机 带蓝色保护壳」。</div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i>信息类型</div>
+      <div class="form-ctrl">
+        <div class="radio-group" id="typeGroup">
+          <label data-type="1" class="on"><input type="radio" name="type" value="1" checked><span>我丢了东西（失物）</span></label>
+          <label data-type="2"><input type="radio" name="type" value="2"><span>我捡到东西（招领）</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i>标题</div>
+      <div class="form-ctrl">
+        <input id="fTitle" type="text" maxlength="50" placeholder="例如：在图书馆一楼大厅捡到一张校园卡"
+               oninput="el('tTitle').textContent = this.value.length + '/50'">
+        <div class="flex-between"><div class="form-hint">4–50 字</div><div class="form-hint" id="tTitle">0/50</div></div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i>分类</div>
+      <div class="form-ctrl"><select id="fCat"></select></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i><span class="locWord">拾获地点</span></div>
+      <div class="form-ctrl">
+        <div class="row">
+          <select id="fArea" style="width:130px">
+            <option value="1">校内</option>
+            <option value="2">校外</option>
+          </select>
+          <select id="fLoc" style="flex:1;min-width:180px"></select>
+        </div>
+        <input id="fLocDetail" type="text" maxlength="80" style="margin-top:8px"
+               placeholder="详细地址（自由填写），如：图书馆一楼大厅靠近自助借还机">
+        <div class="form-hint">先选「校内 / 校外」，再选具体地点；详细地址为必填，用于精确描述位置。</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i><span class="timeWord">拾获时间</span></div>
+      <div class="form-ctrl">
+        <input id="fTime" type="datetime-local">
+        <div class="form-hint">不得晚于当前时间；失物信息发布 30 天后会自动结束。</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i>详细描述</div>
+      <div class="form-ctrl">
+        <textarea id="fDesc" maxlength="1000" placeholder="写清物品特征、发现/丢失的经过、目前物品在何处等，10–1000 字"
+                  oninput="el('tDesc').textContent = this.value.length + '/1000'"></textarea>
+        <div class="flex-between"><div class="form-hint">描述越具体越容易被匹配到</div><div class="form-hint" id="tDesc">0/1000</div></div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label">物品图片</div>
+      <div class="form-ctrl">
+        <div class="uploader" id="uploader">
+          <div class="upload-btn" onclick="el('fileInput').click()">
+            <span style="font-size:20px">＋</span>上传图片
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp" style="display:none" multiple>
+        <div class="form-hint" id="uploadHint"></div>
+      </div>
+    </div>
+
+    <div class="form-row handoverRow">
+      <div class="form-label">上交地址</div>
+      <div class="form-ctrl">
+        <input id="fHandover" type="text" maxlength="80" placeholder="选填，如：图书馆一楼服务台 / 3 号楼宿管处 / 校门口保安室">
+        <input id="fHandoverPhone" type="text" maxlength="11" placeholder="上交地址联系电话（选填，填写后详情页优先展示该号码）"
+               style="margin-top:8px">
+        <div class="form-hint">填写后详情页会优先展示「上交地址 + 该地址的联系电话」，方便失主直接前往领取。</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label">联系人</div>
+      <div class="form-ctrl"><input id="fName" type="text" maxlength="20" placeholder="例如：张三"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label"><i>*</i>联系方式</div>
+      <div class="form-ctrl">
+        <div class="row">
+          <input id="fPhone" type="text" maxlength="11" placeholder="手机号" style="flex:1;min-width:180px">
+          <input id="fWechat" type="text" maxlength="30" placeholder="微信号（二选一）" style="flex:1;min-width:180px">
+        </div>
+        <div class="form-hint">手机号与微信至少填写一项；完整信息仅登录用户可见，未登录访客看到的是脱敏号码。</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label">匿名发布</div>
+      <div class="form-ctrl">
+        <label class="row" style="gap:8px;cursor:pointer">
+          <input type="checkbox" id="fAnon" style="width:auto">
+          <span>对其他人隐藏我的昵称与联系方式，仅通过站内私聊沟通</span>
+        </label>
+        <div class="form-hint">前台显示为「匿名用户」，<b>后台仍完整保留你的实名信息</b>（账号、昵称、手机号、IP、发布时间），管理员可查，用于纠纷追溯。</div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="history.back()">取消</button>
+      <button class="btn btn-primary" id="submitBtn">立即发布</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <b>发布规则（与服务器校验一致）</b>
+    <div class="muted mt8" id="rules"></div>
+  </div>
+</div>
+
+<div class="footer">失物招领系统 v1.0</div>
+
+<script src="static/app.js"></script>
+<script>
+  const editId = Number(qs('id')) || 0;
+  let editing = null;
+  let imageUrls = [];
+
+  function syncTypeUI() {
+    const lost = document.querySelector('input[name=type]:checked').value === '1';
+    document.querySelector('.locWord').textContent = lost ? '丢失地点' : '拾获地点';
+    document.querySelector('.timeWord').textContent = lost ? '丢失时间' : '拾获时间';
+    // 上交地址是「捡到东西」的人登记的，只有招领（type=2）才出现这一栏
+    document.querySelector('.handoverRow').style.display = lost ? 'none' : 'flex';
+  }
+
+  function renderUploader() {
+    const box = el('uploader');
+    box.innerHTML = imageUrls.map((u, i) => `
+      <div class="upload-item">
+        <img src="${esc(u.replace('.jpg', '_thumb.jpg'))}" alt="图片 ${i + 1}">
+        <span onclick="removeImage(${i}, event)">×</span>
+      </div>`).join('') +
+      (imageUrls.length >= SITE.imageMaxCount ? '' :
+        `<div class="upload-btn" onclick="el('fileInput').click()">
+           <span style="font-size:20px">＋</span>上传图片
+         </div>`);
+    el('uploadHint').textContent =
+      `最多 ${SITE.imageMaxCount} 张，单张 ≤ ${SITE.imageMaxMb} MB，支持 JPG / PNG / WebP（服务端会自动压缩并生成缩略图）`;
+  }
+
+  async function removeImage(i, ev) {
+    ev.stopPropagation();
+    const url = imageUrls[i];
+    imageUrls.splice(i, 1);
+    renderUploader();
+    try { await api('/images', { method: 'DELETE', body: { url } }); } catch (e) { /* 已被引用则忽略 */ }
+  }
+
+  async function handleFiles(files) {
+    for (const f of files) {
+      if (imageUrls.length >= SITE.imageMaxCount) { toast(`最多上传 ${SITE.imageMaxCount} 张图片`, 'error'); break; }
+      if (f.size > SITE.imageMaxMb * 1024 * 1024) { toast(`${f.name} 超过 ${SITE.imageMaxMb} MB`, 'error'); continue; }
+      try {
+        toast('正在上传 ' + f.name + ' …');
+        const d = await uploadImage(f);
+        imageUrls.push(d.url);
+        renderUploader();
+      } catch (e) { /* 提示已处理 */ }
+    }
+  }
+
+  async function submit() {
+    const type = Number(document.querySelector('input[name=type]:checked').value);
+    const isLost = type === 1;
+    const payload = {
+      type,
+      title: el('fTitle').value.trim(),
+      categoryId: Number(el('fCat').value),
+      areaType: Number(el('fArea').value),
+      locationId: Number(el('fLoc').value),
+      locationDetail: el('fLocDetail').value.trim(),
+      happenTime: el('fTime').value.replace('T', ' '),
+      description: el('fDesc').value.trim(),
+      contactName: el('fName').value.trim(),
+      contactPhone: el('fPhone').value.trim(),
+      contactWechat: el('fWechat').value.trim(),
+      isAnonymous: el('fAnon').checked,
+      // 上交地址由「捡到东西」的一方登记，仅招领信息提交这两个字段
+      handoverAddress: isLost ? '' : el('fHandover').value.trim(),
+      handoverPhone: isLost ? '' : el('fHandoverPhone').value.trim(),
+      images: imageUrls,
+    };
+    if (payload.title.length < 4) return toast('标题至少 4 个字', 'error');
+    if (payload.description.length < 10) return toast('详细描述至少 10 个字', 'error');
+    if (payload.locationDetail.length < 2) return toast('请填写详细地址（如：图书馆一楼大厅）', 'error');
+    if (!payload.contactPhone && !payload.contactWechat) return toast('手机号与微信至少填写一项', 'error');
+    if (!payload.happenTime) return toast('请选择发生时间', 'error');
+
+    const btn = el('submitBtn');
+    btn.disabled = true;
+    btn.textContent = editing ? '保存中…' : '发布中…';
+    try {
+      if (editing) {
+        await api('/items/' + editing.id, { method: 'PUT', body: payload });
+        toast('修改已保存', 'success');
+        setTimeout(() => location.href = 'item.html?id=' + editing.id, 700);
+      } else {
+        const d = await api('/items', { method: 'POST', body: payload });
+        toast(payload.isAnonymous
+          ? '发布成功，前台显示为「匿名用户」，后台已保留实名信息'
+          : '发布成功，信息已公开展示', 'success');
+        setTimeout(() => location.href = 'item.html?id=' + d.id, 800);
+      }
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = editing ? '保存修改' : '立即发布';
+    }
+  }
+
+  (async () => {
+    await boot('publish');
+    if (!Store.logged) {
+      location.href = 'login.html?redirect=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+    await Dict.load();
+
+    el('fCat').innerHTML = Dict.categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    function fillLocations() {
+      const area = Number(el('fArea').value);
+      const list = Dict.locList(area);
+      el('fLoc').innerHTML = list.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    }
+    fillLocations();
+    el('fArea').onchange = fillLocations;
+    document.querySelectorAll('#typeGroup label').forEach((lab) => {
+      lab.onclick = () => {
+        document.querySelectorAll('#typeGroup label').forEach((x) => x.classList.remove('on'));
+        lab.classList.add('on');
+        lab.querySelector('input').checked = true;
+        syncTypeUI();
+      };
+    });
+    el('fileInput').onchange = (e) => { handleFiles(e.target.files); e.target.value = ''; };
+
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    el('fTime').value = d.toISOString().slice(0, 16);
+
+    el('rules').innerHTML = `
+      · 同一账号 ${SITE.publishIntervalSeconds} 秒内只能发布 1 条，每日最多 ${SITE.publishDailyLimit} 条；<br>
+      · 只有发布人本人可以编辑、下架、删除自己的信息；<br>
+      · 失物信息发布满 ${SITE.itemExpireDays} 天仍未结束的，由服务器定时任务自动置为「已结束」；<br>
+      · 匿名发布仅隐藏前台展示，后台完整保留实名信息，管理员可查；<br>
+      · 认领申请有效期 ${SITE.claimTimeoutHours} 小时，超时未沟通或未完成会自动断开。`;
+
+    // 编辑模式
+    if (editId) {
+      try {
+        editing = await api('/items/' + editId, { auth: true });
+        if (!editing.owner) { toast('只能编辑自己发布的信息', 'error'); setTimeout(() => location.href = 'item.html?id=' + editId, 800); return; }
+        el('pageTitle').textContent = '编辑信息';
+        el('submitBtn').textContent = '保存修改';
+        document.querySelectorAll('#typeGroup label').forEach((lab) => {
+          const on = lab.dataset.type === String(editing.type);
+          lab.classList.toggle('on', on);
+          lab.querySelector('input').checked = on;
+        });
+        el('fTitle').value = editing.title;
+        el('tTitle').textContent = editing.title.length + '/50';
+        el('fCat').value = editing.categoryId;
+        el('fArea').value = editing.areaType;
+        fillLocations();
+        el('fLoc').value = editing.locationId;
+        el('fLocDetail').value = editing.locationDetail || '';
+        el('fTime').value = (editing.happenTime || '').replace(' ', 'T').slice(0, 16);
+        el('fDesc').value = editing.description;
+        el('tDesc').textContent = editing.description.length + '/1000';
+        el('fName').value = editing.contactName || '';
+        el('fPhone').value = editing.contactPhoneRaw || '';
+        el('fWechat').value = editing.contactWechatRaw || '';
+        el('fAnon').checked = !!editing.isAnonymous;
+        el('fHandover').value = editing.handoverAddress || '';
+        el('fHandoverPhone').value = editing.handoverPhoneVisible || '';
+        imageUrls = (editing.images || []).map((i) => i.url);
+      } catch (e) {
+        toast('信息不存在或无权编辑', 'error');
+        setTimeout(() => location.href = 'my-items.html', 800);
+      }
+    }
+    syncTypeUI();
+    renderUploader();
+    el('submitBtn').onclick = submit;
+  })();
+</script>
+</body>
+</html>

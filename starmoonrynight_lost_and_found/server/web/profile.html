@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>资料维护 · 失物招领</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page">
+  <div class="page-title">个人中心</div>
+
+  <div class="admin-layout">
+    <div class="admin-menu">
+      <a href="my-items.html">我的发布</a>
+      <a href="my-claims.html">我的认领</a>
+      <a href="my-favorites.html">我的收藏</a>
+      <a href="profile.html" class="active">资料维护</a>
+      <a href="admin.html" id="adminEntry" style="display:none">管理后台</a>
+      <a href="db.html" id="dbEntry" style="display:none">数据库管理台</a>
+    </div>
+
+    <div>
+      <div class="card">
+        <b>账号资料</b>
+        <div class="form-row">
+          <div class="form-label">头像</div>
+          <div class="form-ctrl row">
+            <img id="avatarImg" class="avatar-sm" style="width:64px;height:64px;font-size:22px" alt="头像">
+            <div>
+              <input type="file" id="avatarFile" accept="image/jpeg,image/png" style="display:none">
+              <button class="btn btn-sm" onclick="el('avatarFile').click()">更换头像</button>
+              <div class="form-hint">≤ 2 MB，支持 JPG / PNG</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-label">用户名</div>
+          <div class="form-ctrl"><input type="text" id="username" disabled></div>
+        </div>
+        <div class="form-row">
+          <div class="form-label">手机号</div>
+          <div class="form-ctrl"><input type="text" id="phone" disabled></div>
+        </div>
+        <div class="form-row">
+          <div class="form-label"><i>*</i>昵称</div>
+          <div class="form-ctrl"><input type="text" id="nickname" maxlength="20" placeholder="2-20 个字符"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-label">微信号</div>
+          <div class="form-ctrl"><input type="text" id="wechat" maxlength="30" placeholder="选填，2-30 个字符"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-label">注册时间</div>
+          <div class="form-ctrl"><input type="text" id="createdAt" disabled></div>
+        </div>
+        <div class="row" style="justify-content:flex-end">
+          <button class="btn" id="pwdBtn">修改密码</button>
+          <button class="btn btn-primary" id="saveBtn">保存修改</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <b>账号统计</b>
+        <div class="row mt8" id="stats"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">失物招领系统 v1.0</div>
+
+<script src="static/app.js"></script>
+<script>
+  async function loadMe() {
+    const me = await api('/users/me');
+    el('username').value = me.username;
+    el('phone').value = me.phone;
+    el('nickname').value = me.nickname;
+    el('wechat').value = me.wechat || '';
+    el('createdAt').value = me.createTime || '';
+    el('avatarImg').src = me.avatar || '';
+    if (!me.avatar) {
+      el('avatarImg').outerHTML = `<span class="avatar-sm" id="avatarImg"
+        style="width:64px;height:64px;font-size:22px">${esc((me.nickname || 'U')[0])}</span>`;
+    }
+    el('stats').innerHTML = `
+      <div class="stat" style="flex:1"><div class="num">${me.itemCount || 0}</div><div class="lbl">我的发布</div></div>
+      <div class="stat" style="flex:1"><div class="num">${me.unreadMessages || 0}</div><div class="lbl">未读私聊</div></div>
+      <div class="stat" style="flex:1"><div class="num">${me.role === 2 ? '管理员' : '普通用户'}</div><div class="lbl">账号角色</div></div>`;
+  }
+
+  (async () => {
+    await boot('center');
+    if (!Store.logged) { location.href = 'login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+    if (Store.user.role === 2) {
+      el('adminEntry').style.display = 'block';
+      el('dbEntry').style.display = 'block';
+    }
+    await loadMe();
+
+    el('saveBtn').onclick = async () => {
+      const nickname = el('nickname').value.trim();
+      if (nickname.length < 2) { toast('昵称需为 2-20 个字符', 'error'); return; }
+      await api('/users/me', { method: 'PUT', body: { nickname, wechat: el('wechat').value.trim() } });
+      const me = await api('/users/me');
+      Store.user = Object.assign(Store.user, { nickname: me.nickname, wechat: me.wechat, avatar: me.avatar });
+      renderNav('center');
+      toast('资料已保存', 'success');
+    };
+
+    el('avatarFile').onchange = async (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 2 * 1024 * 1024) { toast('头像不能超过 2 MB', 'error'); return; }
+      const fd = new FormData();
+      fd.append('file', f);
+      try {
+        const d = await api('/users/me/avatar', { method: 'POST', body: fd, isForm: true });
+        Store.user = Object.assign(Store.user, { avatar: d.url });
+        toast('头像已更新', 'success');
+        renderNav('center');
+        loadMe();
+      } catch (err) { /* ignore */ }
+    };
+
+    el('pwdBtn').onclick = () => {
+      openModal(`<h3>修改密码</h3>
+        <div class="form-row"><div class="form-label">原密码</div>
+          <div class="form-ctrl"><input type="password" id="oldPwd" maxlength="20"></div></div>
+        <div class="form-row"><div class="form-label">新密码</div>
+          <div class="form-ctrl"><input type="password" id="newPwd" maxlength="20" placeholder="8-20 位，含字母与数字"></div></div>
+        <div class="form-row"><div class="form-label">确认密码</div>
+          <div class="form-ctrl"><input type="password" id="newPwd2" maxlength="20"></div></div>
+        <div class="row mt16" style="justify-content:flex-end">
+          <button class="btn" onclick="closeModal()">取消</button>
+          <button class="btn btn-primary" onclick="changePwd()">确认修改</button>
+        </div>`);
+    };
+  })();
+
+  async function changePwd() {
+    const oldPassword = el('oldPwd').value;
+    const newPassword = el('newPwd').value;
+    const confirmPassword = el('newPwd2').value;
+    if (newPassword !== confirmPassword) { toast('两次输入的密码不一致', 'error'); return; }
+    try {
+      await api('/users/me/password', { method: 'PATCH', body: { oldPassword, newPassword, confirmPassword } });
+      closeModal();
+      toast('密码已修改，请重新登录', 'success');
+      Store.clear();
+      setTimeout(() => location.href = 'login.html', 900);
+    } catch (e) { /* ignore */ }
+  }
+</script>
+</body>
+</html>

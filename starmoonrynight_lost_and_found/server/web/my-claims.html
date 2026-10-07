@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的认领 · 失物招领</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page">
+  <div class="page-title">个人中心</div>
+
+  <div class="admin-layout">
+    <div class="admin-menu">
+      <a href="my-items.html">我的发布</a>
+      <a href="my-claims.html" class="active">我的认领</a>
+      <a href="my-favorites.html">我的收藏</a>
+      <a href="profile.html">资料维护</a>
+      <a href="admin.html" id="adminEntry" style="display:none">管理后台</a>
+      <a href="db.html" id="dbEntry" style="display:none">数据库管理台</a>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="tabs" id="tabs" style="margin:0">
+          <button class="active" data-status="">全部</button>
+          <button data-status="1">认领中</button>
+          <button data-status="2">已完成</button>
+          <button data-status="3">已断开</button>
+          <button data-status="4">已取消</button>
+        </div>
+      </div>
+      <div id="list"></div>
+      <div id="pager"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">失物招领系统 v1.0</div>
+
+<script src="static/app.js"></script>
+<script>
+  let state = { status: '', page: 1, size: 8 };
+  const STATUS_TAG = {
+    1: '<span class="tag tag-claiming">认领中</span>',
+    2: '<span class="tag tag-found">已确认完成</span>',
+    3: '<span class="tag tag-end">已超时断开</span>',
+    4: '<span class="tag tag-end">已取消</span>',
+  };
+
+  function block(c) {
+    const actions = [];
+    if (c.status === 1) {
+      actions.push(`<a class="btn btn-sm btn-primary" href="item.html?id=${c.itemId}#chatCard">前往私聊</a>`);
+      actions.push(`<button class="btn btn-sm" onclick="cancelClaim(${c.claimId})">撤回认领</button>`);
+    } else {
+      actions.push(`<a class="btn btn-sm" href="item.html?id=${c.itemId}">${c.status === 3 ? '重新申请' : '查看失物'}</a>`);
+    }
+    return `
+    <div class="card">
+      <div class="flex-between">
+        <div class="row" style="gap:6px">
+          <span class="tag tag-lost">失物</span>
+          ${STATUS_TAG[c.status] || ''}
+          ${c.isAnonymousItem ? '<span class="tag tag-anon">匿名发布</span>' : ''}
+        </div>
+        <span class="muted">申请于 ${esc(c.startTime)}</span>
+      </div>
+      <h3 style="margin:10px 0 6px;font-size:15.5px">
+        <a href="item.html?id=${c.itemId}">${esc(c.itemTitle)}</a>
+      </h3>
+      <div class="item-meta mb8">
+        ${c.status === 1
+          ? `<span class="countdown">剩余 ${c.remainHours} 小时</span><span>有效期 ${c.timeoutHours} 小时</span>`
+          : `<span>结束时间 ${esc(c.finishTime || '-')}</span>`}
+        <span>私聊 ${c.messageCount} 条${c.unreadCount ? `（未读 ${c.unreadCount}）` : ''}</span>
+        ${c.finishReason ? `<span>原因：${esc(c.finishReason)}</span>` : ''}
+      </div>
+      <div class="muted mb8">我的认领说明：${esc(c.claimNote)}</div>
+      <div class="row">${actions.join('')}</div>
+    </div>`;
+  }
+
+  async function load() {
+    renderSkeleton('list', 3);
+    try {
+      const p = new URLSearchParams({ page: state.page, size: state.size });
+      if (state.status) p.set('status', state.status);
+      const d = await api('/claims/mine?' + p.toString());
+      if (!d.list.length) {
+        el('list').innerHTML = `<div class="card"><div class="empty">
+            <div class="icon">📄</div><div>还没有提交过认领申请</div>
+            <div class="mt8"><a class="btn btn-sm" href="search.html?type=1&claimStatus=0">去看看失物信息</a></div></div></div>`;
+      } else {
+        el('list').innerHTML = d.list.map(block).join('');
+      }
+      el('pager').innerHTML = pagerHtml(d.page, d.pages, 'gotoPage');
+    } catch (e) { /* ignore */ }
+  }
+
+  function gotoPage(p) { state.page = p; load(); }
+
+  async function cancelClaim(claimId) {
+    if (!confirmBox('确定撤回你的认领申请？撤回后可在失物详情页重新申请。')) return;
+    await api(`/claims/${claimId}/cancel`, { method: 'PATCH' });
+    toast('已撤回认领', 'success');
+    load();
+  }
+
+  (async () => {
+    await boot('claims');
+    if (!Store.logged) { location.href = 'login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+    await loadSiteConfig();
+    if (Store.user.role === 2) {
+      el('adminEntry').style.display = 'block';
+      el('dbEntry').style.display = 'block';
+    }
+    document.querySelectorAll('#tabs button').forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll('#tabs button').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        state.status = b.dataset.status;
+        state.page = 1;
+        load();
+      };
+    });
+    await load();
+  })();
+</script>
+</body>
+</html>

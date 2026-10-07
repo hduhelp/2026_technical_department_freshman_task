@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>失物招领 · 首页</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page">
+  <div class="hero">
+    <h1>丢了东西？捡到东西？</h1>
+    <p>1 分钟发布信息，1 秒找到线索</p>
+    <div class="hero-search">
+      <input id="kw" type="text" placeholder="搜索物品名称、特征物、地点，例如：雨伞 / 校园卡 / 蓝牙耳机"
+             onkeydown="if(event.key==='Enter')goSearch()">
+      <button onclick="goSearch()">搜索</button>
+    </div>
+    <div class="hot">
+      <b>热门：</b>
+      <a href="search.html?keyword=校园卡">校园卡</a>
+      <a href="search.html?keyword=耳机">耳机</a>
+      <a href="search.html?keyword=钥匙">钥匙</a>
+      <a href="search.html?keyword=保温杯">保温杯</a>
+      <a href="search.html?claimStatus=1">认领中</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="flex-between mb8">
+      <b>按分类查找</b>
+      <span class="muted" id="statLine"></span>
+    </div>
+    <div class="cat-nav" id="cats"></div>
+  </div>
+
+  <div class="section-head">
+    <h2>最新发布</h2>
+    <div class="tabs" id="tabs">
+      <button class="active" data-type="">全部</button>
+      <button data-type="1">失物</button>
+      <button data-type="2">招领</button>
+    </div>
+  </div>
+  <div class="grid-3" id="list"></div>
+
+  <div class="grid-2 mt16">
+    <div class="card">
+      <b>平台数据</b>
+      <div class="row mt8" id="stats"></div>
+      <div class="muted mt8">数据实时来自服务器数据库；已结束的信息不再出现在默认列表中。</div>
+    </div>
+    <div class="card">
+      <b>怎么用</b>
+      <div class="mt8" style="line-height:2">
+        1. 丢了东西 →「我要发布」选<b>失物</b>，填清特征与详细地址；<br>
+        2. 捡到东西 → 选<b>招领</b>，可登记<b>上交地址</b>方便失主自取；<br>
+        3. 不想暴露联系方式 → 勾选<b>匿名发布</b>，用站内私聊沟通；<br>
+        4. 看到自己的失物 → 在详情页<b>提交认领申请</b>，72 小时内沟通完成。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">失物招领系统 v1.0 · 数据存储于本机 SQLite 数据库</div>
+
+<script src="static/app.js"></script>
+<script>
+  let currentType = '';
+
+  async function loadHome() {
+    renderSkeleton('list', 6);
+    try {
+      const d = await api('/items/home', { auth: Store.logged });
+      const list = currentType
+        ? (currentType === '1' ? d.lostLatest : d.foundLatest)
+        : d.latest;
+      renderList('list', list);
+      const s = d.stat || {};
+      el('statLine').textContent = `在架 ${s.itemTotal || 0} 条 · 已结束 ${s.finishedTotal || 0} 条 · 认领中 ${s.claimingTotal || 0} 条`;
+      el('stats').innerHTML = `
+        <div class="stat" style="flex:1"><div class="num">${s.itemTotal || 0}</div><div class="lbl">在架信息</div></div>
+        <div class="stat" style="flex:1"><div class="num">${s.finishedTotal || 0}</div><div class="lbl">已结束</div></div>
+        <div class="stat" style="flex:1"><div class="num">${s.claimingTotal || 0}</div><div class="lbl">认领中</div></div>`;
+    } catch (e) { /* 提示已由 api 统一处理 */ }
+  }
+
+  (async () => {
+    await boot('home');
+    await Dict.load();
+    el('cats').innerHTML = Dict.categories
+      .map((c) => `<a href="search.html?categoryId=${c.id}">${esc(c.name)}</a>`).join('');
+    await loadHome();
+    document.querySelectorAll('#tabs button').forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll('#tabs button').forEach((x) => x.classList.remove('active'));
+        b.classList.add('active');
+        currentType = b.dataset.type;
+        loadHome();
+      };
+    });
+  })();
+</script>
+</body>
+</html>

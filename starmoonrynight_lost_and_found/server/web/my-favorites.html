@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>我的收藏 · 失物招领</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+<div id="nav"></div>
+
+<div class="page">
+  <div class="page-title">个人中心</div>
+
+  <div class="admin-layout">
+    <div class="admin-menu">
+      <a href="my-items.html">我的发布</a>
+      <a href="my-claims.html">我的认领</a>
+      <a href="my-favorites.html" class="active">我的收藏</a>
+      <a href="profile.html">资料维护</a>
+      <a href="admin.html" id="adminEntry" style="display:none">管理后台</a>
+      <a href="db.html" id="dbEntry" style="display:none">数据库管理台</a>
+    </div>
+
+    <div>
+      <div class="grid-3" id="list"></div>
+      <div id="pager"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">失物招领系统 v1.0</div>
+
+<script src="static/app.js"></script>
+<script>
+  let page = 1;
+
+  async function load() {
+    renderSkeleton('list', 3);
+    try {
+      const d = await api(`/favorites?page=${page}&size=9`);
+      if (!d.list.length) {
+        el('list').innerHTML = `<div class="empty">
+            <div class="icon">⭐</div><div>还没有收藏任何信息</div>
+            <div class="mt8"><a class="btn btn-sm" href="search.html">去首页看看 ›</a></div></div>`;
+      } else {
+        el('list').innerHTML = d.list.map((it) => `
+          <div style="position:relative">
+            ${cardHtml(it, '')}
+            <button class="btn btn-sm" style="position:absolute;top:8px;right:8px;z-index:2"
+                    onclick="unfav(event, ${it.id})">取消收藏</button>
+          </div>`).join('');
+      }
+      el('pager').innerHTML = pagerHtml(d.page, d.pages, 'gotoPage');
+    } catch (e) { /* ignore */ }
+  }
+
+  function gotoPage(p) { page = p; load(); }
+
+  async function unfav(ev, id) {
+    ev.stopPropagation();
+    await api('/favorites/' + id, { method: 'DELETE' });
+    toast('已取消收藏', 'success');
+    load();
+  }
+
+  (async () => {
+    await boot('center');
+    if (!Store.logged) { location.href = 'login.html?redirect=' + encodeURIComponent(location.pathname); return; }
+    if (Store.user.role === 2) {
+      el('adminEntry').style.display = 'block';
+      el('dbEntry').style.display = 'block';
+    }
+    await load();
+  })();
+</script>
+</body>
+</html>
