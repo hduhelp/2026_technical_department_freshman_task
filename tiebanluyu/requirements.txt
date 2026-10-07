@@ -1,0 +1,6 @@
+# 依赖清单
+# 为了方便移植，本项目选择尽可能减少第三方库的使用，实际使用的只有2个
+# python -m pip install -r requirements.txt
+
+fastapi>=0.110
+uvicorn>=0.27
