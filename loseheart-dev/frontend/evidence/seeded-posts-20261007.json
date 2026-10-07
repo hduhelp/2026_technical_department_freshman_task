@@ -1,0 +1,248 @@
+{
+  "batch": "07f8a5ba94ad",
+  "demo_only": true,
+  "posts": [
+    {
+      "id": "69",
+      "post_type": "lost",
+      "item_name": "银色头戴式耳机",
+      "review_status": "approved",
+      "author_id": 133,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_7d7f32463ab6"
+        },
+        {
+          "type": "other",
+          "value": "demo_bb3e4ce60ead@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "120"
+      ]
+    },
+    {
+      "id": "70",
+      "post_type": "lost",
+      "item_name": "藏蓝色折叠雨伞",
+      "review_status": "approved",
+      "author_id": 133,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_cef29b255449"
+        },
+        {
+          "type": "other",
+          "value": "demo_59e0a1209431@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "121"
+      ]
+    },
+    {
+      "id": "71",
+      "post_type": "lost",
+      "item_name": "浅绿色保温杯",
+      "review_status": "approved",
+      "author_id": 133,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_e475b7609497"
+        },
+        {
+          "type": "other",
+          "value": "demo_c9572a25ba40@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "122"
+      ]
+    },
+    {
+      "id": "72",
+      "post_type": "lost",
+      "item_name": "米色帆布双肩包",
+      "review_status": "approved",
+      "author_id": 134,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_2defcbf8daeb"
+        },
+        {
+          "type": "other",
+          "value": "demo_480d515b4d33@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "123",
+        "124"
+      ]
+    },
+    {
+      "id": "73",
+      "post_type": "lost",
+      "item_name": "黑色圆框眼镜",
+      "review_status": "returned",
+      "author_id": 134,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_0e9428992f14"
+        },
+        {
+          "type": "other",
+          "value": "demo_c5dcbc0dafc2@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "125"
+      ]
+    },
+    {
+      "id": "74",
+      "post_type": "lost",
+      "item_name": "小黄鸭挂件钥匙串",
+      "review_status": "pending",
+      "author_id": 134,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_2c9f33a0696f"
+        },
+        {
+          "type": "other",
+          "value": "demo_37af666cacf7@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "126"
+      ]
+    },
+    {
+      "id": "75",
+      "post_type": "found",
+      "item_name": "银色头戴式耳机",
+      "review_status": "approved",
+      "author_id": 135,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_2076cd75e758"
+        },
+        {
+          "type": "other",
+          "value": "demo_f8bedea56b8c@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "127"
+      ]
+    },
+    {
+      "id": "76",
+      "post_type": "found",
+      "item_name": "藏蓝色折叠雨伞",
+      "review_status": "approved",
+      "author_id": 135,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_6e566c83ccfd"
+        },
+        {
+          "type": "other",
+          "value": "demo_5bb7c222e600@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "128"
+      ]
+    },
+    {
+      "id": "77",
+      "post_type": "found",
+      "item_name": "浅绿色保温杯",
+      "review_status": "approved",
+      "author_id": 135,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_7852eb45af04"
+        },
+        {
+          "type": "other",
+          "value": "demo_7003537b6c4d@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "129"
+      ]
+    },
+    {
+      "id": "78",
+      "post_type": "found",
+      "item_name": "米色帆布双肩包",
+      "review_status": "approved",
+      "author_id": 136,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_e83afe577c2c"
+        },
+        {
+          "type": "other",
+          "value": "demo_537127c13c0e@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "130",
+        "131"
+      ]
+    },
+    {
+      "id": "79",
+      "post_type": "found",
+      "item_name": "黑色圆框眼镜",
+      "review_status": "returned",
+      "author_id": 136,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_35cdd3ecd21c"
+        },
+        {
+          "type": "other",
+          "value": "demo_9e085e7e77ef@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "132"
+      ]
+    },
+    {
+      "id": "80",
+      "post_type": "found",
+      "item_name": "小黄鸭挂件钥匙串",
+      "review_status": "pending",
+      "author_id": 136,
+      "contact_methods": [
+        {
+          "type": "wechat",
+          "value": "demo_0766c248a460"
+        },
+        {
+          "type": "other",
+          "value": "demo_4153313f90a5@example.invalid（演示邮箱）"
+        }
+      ],
+      "review_ids": [
+        "133"
+      ]
+    }
+  ]
+}
