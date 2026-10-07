@@ -1,0 +1,272 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "校园失物招领系统 API",
+    "description": "后端社团小任务：用户注册登录、失物/招领信息发布与搜索、状态管理。导入 Apifox 后按 README 流程演示即可。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "本地开发环境"
+    }
+  ],
+  "tags": [
+    { "name": "1. 用户认证", "description": "注册、登录、退出、当前用户" },
+    { "name": "2. 失物招领信息", "description": "发布、查看、搜索、修改、删除、状态管理" }
+  ],
+  "paths": {
+    "/api/register": {
+      "post": {
+        "tags": ["1. 用户认证"],
+        "summary": "用户注册",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" },
+              "example": { "username": "zhangsan", "password": "123456", "phone": "13800000000" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "注册成功，返回令牌和用户信息" },
+          "409": { "description": "用户名已存在" }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "tags": ["1. 用户认证"],
+        "summary": "用户登录",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": { "username": "zhangsan", "password": "123456" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "登录成功，返回令牌" },
+          "401": { "description": "用户名或密码错误" }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "tags": ["1. 用户认证"],
+        "summary": "用户退出登录",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "退出成功，令牌被加入黑名单" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/api/user/me": {
+      "get": {
+        "tags": ["1. 用户认证"],
+        "summary": "获取当前登录用户信息",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "当前用户信息" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/api/items": {
+      "get": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "查看/搜索信息列表",
+        "description": "支持按关键词（标题/描述/地点模糊匹配）、类型、状态筛选，并分页。",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "keyword", "in": "query", "schema": { "type": "string" }, "description": "搜索关键词，如：耳机", "example": "" },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["lost", "found"] }, "description": "lost=寻物启事，found=招领启事" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["searching", "found", "closed"] }, "description": "searching=寻找中，found=已找到，closed=已结束" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 }, "description": "页码，默认 1" },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 10 }, "description": "每页条数，默认 10，最大 50" }
+        ],
+        "responses": {
+          "200": { "description": "信息列表" },
+          "401": { "description": "未登录" }
+        }
+      },
+      "post": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "发布失物/招领信息",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateItemRequest" },
+              "examples": {
+                "寻物启事": {
+                  "value": {
+                    "type": "lost",
+                    "title": "丢失黑色无线耳机一副",
+                    "description": "在图书馆三楼自习时丢失，充电盒上有贴纸，拾到者请联系我，非常感谢！",
+                    "location": "图书馆三楼",
+                    "contact": "13800000000"
+                  }
+                },
+                "招领启事": {
+                  "value": {
+                    "type": "found",
+                    "title": "食堂门口捡到一张校园卡",
+                    "description": "中午在一食堂门口捡到校园卡一张，卡面姓名看不清，已交给食堂服务台，失主请联系核对。",
+                    "location": "一食堂门口",
+                    "contact": ""
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "发布成功" },
+          "400": { "description": "参数错误" },
+          "401": { "description": "未登录" }
+        }
+      }
+    },
+    "/api/items/{id}": {
+      "get": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "查看信息详情",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "description": "信息编号", "example": 1 }
+        ],
+        "responses": {
+          "200": { "description": "信息详情" },
+          "404": { "description": "信息不存在" }
+        }
+      },
+      "put": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "修改自己发布的信息",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateItemRequest" },
+              "example": {
+                "title": "丢失黑色无线耳机一副（已更新：可能落在自习室）",
+                "location": "图书馆三楼 302 自习室"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "修改成功" },
+          "403": { "description": "只能修改自己的信息" },
+          "404": { "description": "信息不存在" }
+        }
+      },
+      "delete": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "删除自己发布的信息",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "responses": {
+          "200": { "description": "删除成功" },
+          "403": { "description": "只能删除自己的信息" },
+          "404": { "description": "信息不存在" }
+        }
+      }
+    },
+    "/api/items/{id}/status": {
+      "patch": {
+        "tags": ["2. 失物招领信息"],
+        "summary": "修改信息状态（标记已找到/已结束）",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" }, "example": 1 }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/StatusRequest" },
+              "example": { "status": "found" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "状态修改成功" },
+          "400": { "description": "状态值不合法" },
+          "403": { "description": "只能修改自己的信息" },
+          "404": { "description": "信息不存在" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "登录/注册成功后返回的 token，填入此处即可。请求头格式：Authorization: Bearer <token>"
+      }
+    },
+    "schemas": {
+      "RegisterRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string", "minLength": 3, "maxLength": 20, "description": "用户名，3-20 位" },
+          "password": { "type": "string", "minLength": 6, "maxLength": 32, "description": "密码，6-32 位" },
+          "phone": { "type": "string", "description": "手机号，选填" }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": ["username", "password"],
+        "properties": {
+          "username": { "type": "string" },
+          "password": { "type": "string" }
+        }
+      },
+      "CreateItemRequest": {
+        "type": "object",
+        "required": ["type", "title", "description"],
+        "properties": {
+          "type": { "type": "string", "enum": ["lost", "found"], "description": "lost=寻物，found=招领" },
+          "title": { "type": "string", "maxLength": 50, "description": "标题" },
+          "description": { "type": "string", "description": "详细描述" },
+          "location": { "type": "string", "description": "丢失/捡到地点" },
+          "contact": { "type": "string", "description": "联系方式，不填则默认使用注册手机号" }
+        }
+      },
+      "UpdateItemRequest": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["lost", "found"] },
+          "title": { "type": "string", "maxLength": 50 },
+          "description": { "type": "string" },
+          "location": { "type": "string" },
+          "contact": { "type": "string" }
+        },
+        "description": "需要修改哪些字段就传哪些字段"
+      },
+      "StatusRequest": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["searching", "found", "closed"], "description": "searching=寻找中，found=已找到，closed=已结束" }
+        }
+      }
+    }
+  }
+}
