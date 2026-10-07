@@ -11,3 +11,9 @@ dist/
 # 编辑器
 .idea/
 .vscode/
+
+# 个人工作记录（不提交）
+进度表.md
+
+# 截图中间产物（README 配图用 docs/images/ 下的）
+docs/screenshots/
