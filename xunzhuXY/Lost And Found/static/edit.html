@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>修改帖子 · 校园失物招领</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="form-page">
+    <h3>修改帖子</h3>
+
+    <p id="item-id" class="muted"></p>
+
+    <div><input id="type" class="input" placeholder="丢失或招领"></div>
+    <div><input id="title" class="input" placeholder="物品类型"></div>
+    <div><input id="place" class="input" placeholder="地点"></div>
+    <div><input id="happened-at" class="input" placeholder="发现时间"></div>
+    <div><input id="description" class="input" placeholder="描述"></div>
+    <div><input id="contact-info" class="input" placeholder="联系方式"></div>
+    <div>
+        <select id="sta">
+            <option value="searching">寻找中</option>
+            <option value="found">找到了</option>
+            <option value="closed">关闭了</option>
+        </select>
+    </div>
+
+    <label id="imgLabel">当前图片</label>
+    <div class="img-box">
+        <img id="nowImage" alt="图片" style="display:none;">
+        <span id="noImage" class="muted">暂无图片</span>
+    </div>
+
+    <div style="margin-top:12px;">
+        <input type="file" id="image" accept="image/*">
+    </div>
+    <button class="btn" onclick="edit()">保存修改</button>
+    <pre id="out"></pre>
+
+    <footer>
+        <button class="btn ghost" onclick="back()">返回管理界面</button>
+    </footer>
+  </div>
+
+    <script>
+        const sel = document.getElementById("sta");
+        const itemId = localStorage.getItem("itemId")
+        const out = document.getElementById("out");
+        const token = localStorage.getItem("token");
+        const id = itemId
+        document.getElementById("item-id").textContent = "当前修改的帖子 ID：" + itemId;
+
+        /* ★ 图片框：一个框同时充当"当前图片"和"新图预览"
+           —— 语义清楚：框里就是【保存后会生效的那张图】 */
+        let originalSrc = "";      // 数据库里已有的图（取消选择时恢复用）
+        let previewUrl  = "";      // createObjectURL 造的临时地址（要释放）
+
+        function showImg(src) {
+            const img = document.getElementById("nowImage");
+            const no  = document.getElementById("noImage");
+            if (src) {
+                img.src = src;
+                img.style.display = "block";
+                no.style.display = "none";
+            } else {
+                img.style.display = "none";
+                img.removeAttribute("src");     // ★ 清掉 src，避免破图
+                no.style.display = "block";
+            }
+        }
+
+        Detail(id);
+
+        /* ★★ 选中新图 → 直接替换同一个框（不另开一个预览图，免得用户搞不清哪张算数）*/
+        document.getElementById("image").addEventListener("change", function () {
+            const f = this.files[0];
+            const label = document.getElementById("imgLabel");
+
+            if (!f) {                                   // 点了"取消"
+                showImg(originalSrc);
+                label.textContent = "当前图片";
+                return;
+            }
+            if (f.size > 5 * 1024 * 1024) {             // ★ 后端限制 5MB，提前拦
+                alert("图片不能超过 5MB");
+                this.value = "";
+                showImg(originalSrc);
+                label.textContent = "当前图片";
+                return;
+            }
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            previewUrl = URL.createObjectURL(f);
+            showImg(previewUrl);
+            label.textContent = "新图片（保存后生效）";   // ★ 明确告诉用户
+        });
+
+        function back(){
+            window.location.href = "/static/manage.html";
+        }
+
+        //编辑
+        async function edit(){
+
+            if (!token) {
+                alert("请先登录");
+                window.location.href = "/static/login.html";
+                return;
+            }
+            out.textContent = "修改中...";
+            try{
+                const filename = await uploadImage();
+                const res = await fetch(`/items/${id}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + token,
+                    },
+                    body: JSON.stringify({
+                        type: document.getElementById("type").value,
+                        title: document.getElementById("title").value,
+                        place:document.getElementById("place").value,
+                        happened_at:document.getElementById("happened-at").value,
+                        description:document.getElementById("description").value,
+                        contact_info:document.getElementById("contact-info").value,
+                        status:sel.value,
+                        image:filename,
+                    }),
+                });
+                const data = await res.json();
+                if (!res.ok) {                                     // ★ 失败也要说话
+                    out.textContent = "修改失败：" + (data.msg || res.status);
+                    return;
+                }
+                alert( "修改成功 ✓\n" + JSON.stringify(data, null, 2));
+                window.location.href = "/static/manage.html";
+            } catch (e){
+                out.textContent = "请求失败：" + e.message;
+            }
+        }
+
+        //返回详细数据
+        async function Detail(id) {
+            let res;
+            let resJson;
+            try{
+                res = await fetch ("/items/" + id);
+                resJson = await res.json();
+
+                if(!res.ok){
+                    out.textContent = "加载失败：" + (resJson.msg || res.status);
+                    return;
+                }
+            }catch(e){
+                out.textContent = "请求失败：" + e.message;
+                return;
+            }
+            const data = resJson.data;
+            document.getElementById("type").value = data.type;
+            document.getElementById("title").value = data.title;
+            document.getElementById("place").value = data.place;
+            document.getElementById("happened-at").value = data.happened_at;
+            document.getElementById("description").value = data.description;
+            document.getElementById("contact-info").value = data.contact_info;
+            document.getElementById("sta").value = data.status;
+
+            //图片
+            originalSrc = data.image ? "/uploads/" + data.image : "";
+            showImg(originalSrc);
+        }
+
+        async function uploadImage() {
+            const token = localStorage.getItem("token");
+            if (!token) {
+                alert("请先登录");
+                window.location.href = "/static/login.html";
+                return;
+            }
+            const f = document.getElementById("image").files[0];
+            if (!f) return "";
+
+            const fd = new FormData();
+            fd.append("file", f);                     // ★ 字段名要和后端一致
+
+            const res = await fetch("/upload", {
+                method:"POST",
+                headers: { "Authorization": "Bearer " + token },
+                body: fd,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.msg || res.status);
+            return data.data.filename;                // 拿文件名去发帖 ✓
+        }
+
+        localStorage.removeItem("itemId");
+    </script>
+</body>
+</html>

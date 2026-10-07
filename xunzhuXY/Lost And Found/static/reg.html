@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>注册 · 校园失物招领</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="center-page">
+        <h3>注册</h3>
+
+        <div>
+            <input id="u" class="input" placeholder="用户名">
+        </div>
+        <div>
+            <input id="p" class="input" type="password" placeholder="密码（至少 6 位）">
+        </div>
+        <div style="margin-top:16px;">
+            <button class="btn" onclick="reg()">注册</button>
+        </div>
+        <div><pre id="out"></pre></div>
+
+        <footer>
+            <div><a class="link" href="/static/login.html">已有账号，去登录</a></div>
+            <div style="margin-top:10px;">
+                <a class="link" href="/static/index.html">← 返回主菜单</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        async function reg() {
+            const out = document.getElementById("out");
+            out.textContent = "注册中...";
+            try {
+                const res = await fetch("/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: document.getElementById("u").value,
+                        password: document.getElementById("p").value,
+                    }),
+                });
+                const data = await res.json();
+
+                // ★ 原来这里没判失败就直接跳转了（失败也会跳走）
+                if (!res.ok) {
+                    out.textContent = "注册失败：" + (data.msg || res.status);
+                    return;
+                }
+                alert("注册成功，请前往登录");
+                window.location.href = "/static/login.html";
+            } catch (e) {
+                out.textContent = "请求失败：" + e.message;
+            }
+        }
+        function back(){
+            window.location.href = "/static/index.html"
+        }
+        function backToLogin(){
+            window.location.href = "/static/login.html"
+        }
+    </script>
+</body>
+</html>

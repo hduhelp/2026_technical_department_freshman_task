@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>校园失物招领</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>校园失物招领</h1>
+  <div id="auth"></div>
+</header>
+
+<section class="filters">
+  <select id="type">
+    <option value="">全部类型</option>
+    <option value="丢失">丢失</option>
+    <option value="招领">招领</option>
+  </select>
+  <input id="keyword" placeholder="搜索物品名 / 描述 / 帖子ID" style="flex:1; min-width:160px;">
+  <select id="order">
+    <option value="desc">最新在前</option>
+    <option value="asc">最早在前</option>
+  </select>
+  <select id="status">
+    <option value="">全部状态</option>
+    <option value="searching">寻找中</option>
+    <option value="found">已找到</option>
+    <option value="closed">已关闭</option>
+  </select>
+  <button onclick="load(1)">搜索</button>
+  <a href="/static/publish.html">+ 发布</a>
+</section>
+
+<ul id="list"></ul>
+<div id="pager"></div>
+<pre id="out"></pre>
+
+<script>
+const $ = (id) => document.getElementById(id); //化繁为简
+const SIZE = 10;
+let page = 1;
+
+// ★ 后端存的是英文，显示时换成中文（"存储用英文、显示用中文"）
+const STATUS_TEXT = { searching: "寻找中", found: "已找到", closed: "已结束" };
+
+// ★ 状态 → 徽章 class（用 st- 前缀，避免和"类型"徽章的 found 撞名）
+function statusClass(s) {
+  if (s === "searching") return "st-searching";
+  if (s === "found")     return "st-found";
+  return "st-closed";
+}
+
+/* ---------- 登录状态 ---------- */
+function renderAuth() { 
+  const token = localStorage.getItem("token");
+  const name  = localStorage.getItem("name");
+  const box = $("auth");
+  box.textContent = "";                       // 清空
+
+  if (token) {
+    const span = document.createElement("span");
+    span.textContent = "已登录：" + (name || "?") + " ";
+    const btn = document.createElement("button");
+    const manageBtn = document.createElement("button");
+    btn.textContent = "登出";
+    manageBtn.textContent = "管理我的帖子";
+    btn.onclick = () => { localStorage.clear(); renderAuth(); load(1); };
+    manageBtn.onclick = () => {window.location.href = "/static/manage.html";};
+    box.append(span, manageBtn, btn);
+  } else {
+    const login = document.createElement("a");
+    const reg = document.createElement("a");
+    login.href = "/static/login.html";
+    reg.href = "/static/reg.html";
+    login.textContent = "登录 ";
+    reg.textContent = " 注册";
+    box.append(login,"/",reg);
+  }
+}
+
+/* ---------- 画列表（全程 textContent，不用 innerHTML） ---------- */
+function renderList(items) {
+  const list = $("list");
+  list.textContent = "";
+
+  //没有找到帖子
+  if (!items || items.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "没有找到相关帖子";
+    list.appendChild(li);
+    return;
+  }
+
+  for (const it of items) {
+    const li = document.createElement("li");
+
+    //添加详情页
+    const detail = document.createElement("div");
+    detail.className = "detail";
+    detail.style.display = "none";
+    
+
+    li.className = "card";
+    //li.onclick = () => toggleDetail(detail,it.item_id);
+
+    const left = document.createElement("div");
+
+    // ★ 标题行：类型徽章 + 标题
+    const titleRow = document.createElement("div");
+    titleRow.style.cssText = "display:flex;align-items:center;gap:8px;flex-wrap:wrap;";
+
+    const typeBadge = document.createElement("span");
+    typeBadge.className = "badge " + (it.type === "招领" ? "found" : "lost");
+    typeBadge.textContent = it.type;                     // "丢失" / "招领"
+
+    const title = document.createElement("span");
+    title.className = "title";
+    title.textContent = it.title;                        // ★ 标题里不再拼 [类型]
+
+    titleRow.append(typeBadge, title);
+
+    // ★ meta 行：地点 · 状态徽章 · 时间
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const statusBadge = document.createElement("span");
+    statusBadge.className = "badge " + statusClass(it.status);
+    statusBadge.textContent = STATUS_TEXT[it.status] || it.status;
+
+    meta.append(
+      document.createTextNode(it.place + " · "),
+      statusBadge,
+      document.createTextNode(" · " + it.created_at)
+    );
+
+    left.append(titleRow, meta);
+
+    const btn = document.createElement("button");
+    btn.className = "open";
+    btn.textContent = "展开";
+    btn.onclick = () => toggleDetail(detail,it.item_id);
+    //btn.onclick = () => del(it.item_id);
+
+    //缩略图
+    if(it.image){
+      const img = document.createElement("img");
+      img.classList.add("small-image");
+      img.src = "/uploads/" + it.image;
+      img.onerror = () => { img.style.display = "none"; };   // ★ 加载失败就不显示（防破图 ✓）
+      left.appendChild(img);
+    }
+
+    li.append(left, btn);
+    li.appendChild(detail);
+    list.appendChild(li);
+  }
+}
+
+/* ---------- 分页条 ---------- */
+function renderPager(total, cur, size) {
+  const pager = $("pager"); 
+  pager.textContent = "";
+  const pages = Math.max(1, Math.ceil(total / size));
+
+  const prev = document.createElement("button");
+  prev.textContent = "上一页";
+  prev.disabled = cur <= 1;
+  prev.onclick = () => load(cur - 1);
+
+  const info = document.createElement("span");
+  info.textContent = " 第 " + cur + " / " + pages + " 页（共 " + total + " 条） ";
+
+  const next = document.createElement("button");
+  next.textContent = "下一页";
+  next.disabled = cur >= pages;
+  next.onclick = () => load(cur + 1);
+  pager.append(prev, info, next);
+}
+
+/* ---------- 拉列表 ---------- */
+async function load(p) {
+  page = p;
+  const out = $("out");
+  out.textContent = "";
+
+  const qs = new URLSearchParams();            // ★ 自动做 URL 编码（中文关键词也安全）
+  if ($("type").value)         qs.set("type", $("type").value);
+  if ($("keyword").value.trim()) qs.set("keyword", $("keyword").value.trim());
+  if ($("status").value) qs.set("status",$("status").value);
+  qs.set("order", $("order").value);
+  qs.set("page", page);
+  qs.set("size", SIZE);
+
+  try { 
+    const res  = await fetch("/items?" + qs.toString()); //会变成: /items?type=..&keyword=..&order=..&...
+    const data = await res.json();
+    //console.log(data.data);
+    if (!res.ok) { out.textContent = "加载失败：" + (data.msg || res.status); return; }
+    renderList(data.data);
+    renderPager(data.total, data.page, data.size);
+  } catch (e) {
+    out.textContent = "请求失败：" + e.message;
+  }
+}
+
+/*------------ 返回详情 ------------*/
+async function renderDetail(box, item) {
+  box.textContent = "";
+
+  const fields = [
+    ["类型",     item.type],
+    ["物品名",   item.title],
+    ["地点",     item.place],
+    ["发生时间", item.happened_at],
+    ["描述",     item.description],
+    ["联系方式", item.contact_info],            // ★ 详情里才有
+    ["状态",     STATUS_TEXT[item.status] || item.status],
+    ["发布者",   item.publisher],
+    ["发布时间", item.created_at],
+    ["帖子ID", item.item_id],
+  ];
+
+  for (const [label, value] of fields){
+    const p = document.createElement("p");
+    p.textContent = label + "：" + (value || "—");
+    box.appendChild(p);
+  }
+  const img = document.createElement("img");
+  img.classList.add("big-image");
+  img.src = "/uploads/" + item.image;
+  img.onerror = () => { img.style.display = "none"; };
+  box.appendChild(img);
+}
+
+/*------------ 显示详情 ------------*/
+async function toggleDetail(detail,id) {
+  // 1.已经展开 -> 收起
+  if (detail.style.display !== "none"){
+    detail.style.display = "none";
+    return;
+  }
+  // 2.没展开 -> 展开(第一次展开需要拿数据)
+  if (!detail.dataset.loaded){
+    detail.textContent = "加载中...";
+    try{
+      const res = await fetch ("/items/" + id);
+      const data = await res.json();
+      if(!res.ok){
+        detail.textContent = "加载失败：" + (data.msg || res.status); 
+        return; 
+      }
+      renderDetail(detail, data.data);            // ★ 用 createElement + textContent
+      detail.dataset.loaded = 1;
+    } catch(e) {
+      detail.textContent = "请求失败：" + e.message;
+      return;
+    }
+  }
+  //3. 展开
+  detail.style.display = "block";
+}
+
+
+
+/* ---------- 删除 ---------- */
+/*
+async function del(id) {
+  if (!confirm("确定删除第 " + id + " 条帖子吗？")) return;
+
+  const token = localStorage.getItem("token");
+  const out = $("out");
+  if (!token) { out.textContent = "请先登录"; return; }
+
+  try {
+    const res = await fetch("/items/" + id, {
+      method: "DELETE",
+      headers: { "Authorization": "Bearer " + token },
+    });
+    const data = await res.json();
+
+    if (res.status === 401) {
+      localStorage.clear(); renderAuth();
+      out.textContent = "登录已失效，请重新登录";
+      return;
+    }
+    if (!res.ok) { out.textContent = "删除失败：" + (data.msg || res.status); return; }
+
+    out.textContent = "删除成功 ✓";
+    load(page);
+  } catch (e) {
+    out.textContent = "请求失败：" + e.message;
+  }
+}
+*/
+
+/* ---------- 启动 ---------- */
+renderAuth();
+load(1);
+</script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>登录 · 校园失物招领</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="center-page">
+        <h3>登录</h3>
+
+        <div>
+            <input id="u" class="input" placeholder="用户名">
+        </div>
+        <div>
+            <input id="p" class="input" type="password" placeholder="密码">
+        </div>
+        <div style="margin-top:16px;">
+            <button class="btn" onclick="login()">登录</button>
+        </div>
+        <div><pre id="out"></pre></div>
+
+        <footer>
+            <div><a class="link" href="/static/reg.html">没有账号，在这里注册</a></div>
+            <div style="margin-top:10px;">
+                <a class="link" href="/static/index.html">← 返回主菜单</a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        async function login() {
+            const out = document.getElementById("out");
+            out.textContent = "登录中...";
+            try {
+                const res = await fetch("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        username: document.getElementById("u").value,
+                        password: document.getElementById("p").value,
+                    }),
+                });
+                const data = await res.json();
+
+                if (!res.ok) {                                     // ★ 失败也要说话
+                    out.textContent = "登录失败：" + (data.msg || res.status);
+                    return;
+                }
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("name" , document.getElementById("u").value);
+                alert("登录成功 ✓\ntoken: " + data.token.slice(0, 24) + "...");
+                window.location.href = "/static/index.html";
+                // ★ 显示 token 前 24 位 —— 你就知道"确实存到了、而且是这个"✓✓
+            } catch (e) {
+                out.textContent = "请求失败：" + e.message;
+            }
+        }
+        function back(){
+            window.location.href = "/static/index.html"
+        }
+    </script>
+</body>
+</html>
