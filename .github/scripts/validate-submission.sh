@@ -4,8 +4,9 @@ set -Eeuo pipefail
 BASE_REF="${1:-origin/${GITHUB_BASE_REF:-main}}"
 HEAD_REF="${2:-HEAD}"
 
-mapfile -t changed_files < <(
-  git diff --name-only --diff-filter=ACDMR "$BASE_REF...$HEAD_REF"
+# Use NUL-delimited paths so Git does not quote non-ASCII or unusual filenames.
+mapfile -d '' -t changed_files < <(
+  git diff --name-only -z --diff-filter=ACDMR "$BASE_REF...$HEAD_REF"
 )
 
 if ((${#changed_files[@]} == 0)); then
