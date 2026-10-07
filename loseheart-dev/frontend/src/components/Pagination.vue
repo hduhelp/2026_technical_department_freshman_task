@@ -1,0 +1,2 @@
+<script setup>defineProps({ page: Number, total: Number, size: { type: Number, default: 12 } }); defineEmits(['change'])</script>
+<template><div class="pagination"><span>共 {{ total }} 条记录</span><div class="row"><button class="secondary small" :disabled="page <= 1" @click="$emit('change', page - 1)">上一页</button><span>{{ page }} / {{ Math.max(1, Math.ceil(total / size)) }}</span><button class="secondary small" :disabled="page * size >= total" @click="$emit('change', page + 1)">下一页</button></div></div></template>

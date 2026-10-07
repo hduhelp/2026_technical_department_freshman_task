@@ -1,0 +1,2 @@
+<script setup>defineProps({ error: String, loading: Boolean, empty: Boolean }); defineEmits(['retry'])</script>
+<template><div v-if="loading" class="skeleton" aria-live="polite">正在加载…</div><div v-else-if="error" class="empty"><span class="state-icon">!</span><h2>{{ error }}</h2><button class="secondary" @click="$emit('retry')">重新查看</button></div><div v-else-if="empty" class="empty"><span class="state-icon">⌕</span><h2>暂时没有相关记录</h2><p>试试调整筛选条件，或稍后再来。</p><slot /></div></template>
