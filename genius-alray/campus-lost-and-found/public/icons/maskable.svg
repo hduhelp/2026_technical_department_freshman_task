@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="校园失物招领">
+  <!--
+    maskable 版本：背景满幅出血，图形缩到 78%，
+    保证被裁成圆形/圆角矩形（安全区为直径 80% 的圆）时不会切到放大镜。
+    源图形见 public/icons/icon.svg。
+  -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="75%">
+      <stop offset="0%" stop-color="#a6f000"/>
+      <stop offset="62%" stop-color="#9ae600"/>
+      <stop offset="100%" stop-color="#7ccf00"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256) scale(0.78) translate(-256 -256)">
+    <g fill="none" stroke="#35530e" stroke-linecap="round">
+      <circle cx="228" cy="228" r="100" stroke-width="46"/>
+      <path d="M297 297L382 382" stroke-width="50"/>
+    </g>
+  </g>
+</svg>

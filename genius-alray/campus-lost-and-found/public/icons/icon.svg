@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="校园失物招领">
+  <!--
+    PWA 图标源文件。品牌色取自 app/globals.css：
+    primary(light) oklch(0.841 0.238 128.85) ≈ #9ae600，
+    primary-foreground(light) oklch(0.405 0.101 131.063) ≈ #35530e。
+    图形（放大镜）在 512 画布中占据 105..407，四周各留 ~20% 余量，
+    这样 "any" 与 "maskable" 两种用途共用同一份视觉中心。
+    重新导出：magick -background none -density 288 public/icons/icon.svg -resize 512x512 public/icons/icon-512.png
+  -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="75%">
+      <stop offset="0%" stop-color="#a6f000"/>
+      <stop offset="62%" stop-color="#9ae600"/>
+      <stop offset="100%" stop-color="#7ccf00"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g fill="none" stroke="#35530e" stroke-linecap="round">
+    <circle cx="228" cy="228" r="100" stroke-width="46"/>
+    <path d="M297 297L382 382" stroke-width="50"/>
+  </g>
+</svg>
