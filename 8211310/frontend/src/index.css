@@ -1,0 +1,1147 @@
+/* src/index.css —— 手写样式，不引组件库。
+   移动优先：失物招领的真实场景是学生在手机上翻广场，所以断点从窄往宽写。 */
+
+:root {
+  --fg: #16181d;
+  --fg-muted: #5c6470;
+  --bg: #f4f5f7;
+  --card: #ffffff;
+  --line: #dfe2e8;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+}
+
+.brand {
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nav a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.nav a:hover,
+.nav a.active {
+  color: var(--primary);
+}
+
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted);
+}
+
+.link-btn {
+  border: 0;
+  background: none;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.app-main {
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.card h1 {
+  margin: 0 0 14px;
+  font-size: 19px;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--fg);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  border-color: var(--primary);
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--fg);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-dark);
+}
+
+/* 计划 §M7：拍照/上传入口必须显眼 —— 大、全宽，不藏在小弹窗底部 */
+.btn-block {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.alert {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.notice {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #194a91;
+}
+
+.muted {
+  color: var(--fg-muted);
+  font-size: 14px;
+}
+
+.hint {
+  margin: 6px 0 0;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.req-id {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 6px 12px;
+  margin: 0 0 16px;
+}
+
+.kv dt {
+  color: var(--fg-muted);
+  font-size: 14px;
+}
+
+.kv dd {
+  margin: 0;
+}
+
+@media (min-width: 720px) {
+  .app-main {
+    padding: 24px;
+  }
+}
+
+/* ---------- 片 2：广场列表、详情、匹配表、举报弹层 ---------- */
+
+.type-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.tab {
+  flex: 1;
+  padding: 8px 10px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.tab-on {
+  border-color: var(--primary);
+  background: #eef4ff;
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 14px;
+}
+
+.filter-row .field {
+  margin-bottom: 0;
+}
+
+.grow {
+  flex: 1;
+  min-width: 180px;
+}
+
+.cascader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cascader-part {
+  flex: 1;
+  min-width: 140px;
+}
+
+.item-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.item-card {
+  border-top: 1px solid var(--line);
+}
+
+.item-card > a {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.item-cover {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.item-cover-empty {
+  display: grid;
+  place-items: center;
+  color: var(--fg-muted);
+  font-size: 12px;
+  border: 1px dashed var(--line);
+}
+
+.item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.item-title {
+  font-weight: 600;
+}
+
+.item-meta {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.item-contact {
+  color: var(--primary-dark);
+  font-size: 13px;
+}
+
+.item-tags {
+  display: flex;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.tag {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  color: var(--fg-muted);
+}
+
+.tag-lost {
+  background: #fff4e5;
+  border-color: #f0c48a;
+  color: #8a5310;
+}
+
+.tag-found {
+  background: #eaf7ef;
+  border-color: #9fd4b4;
+  color: #1d6b3a;
+}
+
+.tag-closed,
+.tag-deleted {
+  background: var(--bg);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.detail-head h1 {
+  margin-bottom: 0;
+}
+
+/* 计划 §M7：举报入口要**弱**。所以它是普通文字颜色的按钮，不是红色图标。 */
+.report-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--fg-muted);
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.gallery {
+  list-style: none;
+  margin: 14px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.gallery-img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.description {
+  white-space: pre-wrap;
+  margin: 0 0 16px;
+}
+
+.contact-value {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+/* dt/dd 被包进 div 只是为了能加 key，布局必须回到父级的 grid 上。
+   漏了这一行，详情页那两个时间行会各占一整列，看起来像排版坏了。 */
+.kv-pair {
+  display: contents;
+}
+
+.match-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.match-hit {
+  margin-bottom: 18px;
+}
+
+.match-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0 0 6px;
+}
+
+.match-score {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.signals {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.signals th,
+.signals td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.signals th {
+  color: var(--fg-muted);
+  font-weight: 600;
+}
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 32, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 14px 14px 0 0;
+  padding: 16px 18px 22px;
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sheet-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.sheet-close {
+  border: 0;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.reasons {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+
+.reasons legend {
+  padding: 0 6px;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.reason {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.reason input {
+  width: auto;
+}
+
+@media (min-width: 720px) {
+  .sheet-backdrop {
+    align-items: center;
+  }
+
+  .sheet {
+    border-radius: 14px;
+  }
+}
+
+/* ---------- 片 3：发布/编辑表单、全屏拍照层、作者操作 ---------- */
+
+/* 必填红星。它标成 aria-hidden：读屏念出「标题 星号」没有任何信息量，
+   真正的必填提示由下面那句 hint 或者 label 文本承担。 */
+.req {
+  color: var(--danger);
+}
+
+.field-error {
+  margin: 6px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* 计划里那两句必须显眼的引导（描述要写外观特征、found_at 是实际捡到的时间）。
+   它们不是错误，所以不能用红色；但挤在灰字 hint 里就等于没有。 */
+.hint.strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.thumb-grid {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.thumb-cell {
+  position: relative;
+}
+
+.thumb-cell img,
+.capture-cell img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg);
+  display: block;
+}
+
+.capture-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(20, 24, 32, 0.62);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.confirm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+/* 拍照层：**全屏**（计划明写「不要藏在小弹窗底部，不要加多余的滑动面板」）。
+   100% 高度 + 底部一个全宽主按钮，剩下的空间全是预览。 */
+.capture-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #10131a;
+  display: flex;
+  justify-content: center;
+}
+
+.capture {
+  width: 100%;
+  max-width: 560px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 18px;
+  color: var(--fg);
+  background: var(--card);
+  overflow-y: auto;
+}
+
+.capture-head {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.capture-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: min-content;
+  gap: 8px;
+  align-content: start;
+}
+
+.capture-empty {
+  grid-column: 1 / -1;
+}
+
+/* 那个 file input 是**功能本体**：capture="environment" 靠它调系统相机。
+   藏起来而不是删掉，用 opacity/尺寸而不是 display:none ——
+   display:none 的元素在部分浏览器上 click() 不生效，那样按钮就彻底废了。 */
+.capture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.capture-shot {
+  margin-top: auto;
+}
+
+.owner-actions h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--fg-muted);
+}
+
+.owner-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ---- 片 4「我的」那一族 ---- */
+
+.me-entries h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--fg-muted);
+}
+
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.entry-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.entry-list a {
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* 我的发布里一张卡片下面挂的那些文字按钮。
+   它们必须是卡片的**兄弟**而不是套在封面那条链接里面（嵌套 <a> 会被浏览器拆开），
+   所以这里靠 gap + 上边框把它们和摘要分开，而不是再画一个盒子。 */
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 0 0 12px;
+}
+
+/* 下架原因：这块的底色用 danger 那一族但强度压低 ——
+   它是「解释」，不是「你犯了错」；举报和下架都不是裁决。 */
+.removal-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--danger);
+  background: var(--danger-bg);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.removal-box strong {
+  color: var(--danger);
+}
+
+/* 解锁名单 / 积分流水这类「一条一件事」的日志表。
+   三列在窄屏上换行而不是压成一堆：手机上时间那一段掉到第二行比挤成 8px 好读。 */
+.log-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.log-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.log-who {
+  font-weight: 600;
+}
+
+.log-reason {
+  flex: 1;
+  min-width: 0;
+}
+
+.log-time {
+  color: var(--fg-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.log-delta {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  min-width: 3ch;
+}
+
+.log-delta-plus {
+  color: #147a3d;
+}
+
+.log-delta-minus {
+  color: var(--danger);
+}
+
+/* 当前分单独一块：它是「现在是多少」，和下面那张「怎么来的」的表不是一回事，
+   视觉上分开是为了让人不去把它们加在一起。 */
+.credit-now {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  font-size: 14px;
+}
+
+.credit-now strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 片 5：归还确认流 + 通知中心 ---- */
+
+/* 顶栏那个未读小红点。它必须能被忽略：不用读通知的人不该被一个晃动的东西拽着，
+   所以它是静止的文字色块而不是闪烁动画，99+ 封顶也是为了不让顶栏被撑开。 */
+.badge {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 「我提交过的 / 别人提交给我的」这一族的行：一行一件事，纵向排，
+   手机上标题和状态挤在一行会看不清哪个是标题。 */
+.ret-list,
+.n-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.ret-row,
+.n-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.ret-row a,
+.n-head a {
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* 归还状态用色块而不是灰字：这一页人要一眼扫出「哪些还等着我处理」，
+   而 pending 是唯一需要他动手的那个，所以它单独给琥珀色。 */
+.ret-state {
+  align-self: flex-start;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ret-state-pending {
+  background: #fff4e5;
+  border-color: #f0c48a;
+  color: #8a5310;
+}
+
+.ret-state-confirmed {
+  background: #eaf7ef;
+  border-color: #9fd4b4;
+  color: #1d6b3a;
+}
+
+.ret-state-rejected {
+  background: var(--danger-bg);
+  border-color: #f0b3ac;
+  color: var(--danger);
+}
+
+.ret-state-cancelled {
+  background: var(--bg);
+  color: var(--fg-muted);
+}
+
+.ret-note {
+  font-size: 13px;
+}
+
+.proof-picked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.proof-img {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+/* 字数计数器放在输入框下面右对齐，因为它跟着这个框走，不是一句独立的说明。
+   超限时才变红：常态下抢眼睛会让人以为已经填错了。 */
+.counter {
+  display: block;
+  margin-top: 4px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.counter.over {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.ret-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.alert-inline {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* 未读的那一条整行给一点底色，而不只是靠 tag：
+   扫一屏通知时人找的是「哪几条我没看过」，行底色比右上角一个小标签先被看到。 */
+.n-unread {
+  background: #fbfcfe;
+  border-left: 3px solid var(--primary);
+  padding-left: 12px;
+  margin-left: -12px;
+}
+
+.n-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  font-weight: 600;
+}
+
+.n-body {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.tag-new {
+  background: #eef4ff;
+  border-color: #a9c6f5;
+  color: var(--primary-dark);
+  font-weight: 600;
+}
+
+/* ---------- 片 6：管理后台 ----------
+   这一族全是「一行一件事 + 一句后果」的清单，不是数据表格：
+   手机上（真实场景）一张八列的表会横向滚，而管理员要在里面做判断，
+   判断需要的东西必须和那一行贴在一起，不能让他左右对着读。 */
+
+.adm-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+.adm-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.adm-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+}
+
+.adm-name {
+  font-weight: 600;
+}
+
+.adm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+}
+
+/* 展开在某一行之下的那个表单：左边一条竖线，让人看清它属于上面哪一行。 */
+.adm-form {
+  border-left: 3px solid var(--primary);
+  padding-left: 12px;
+  margin: 6px 0 2px;
+}
+
+/* 理由 / 说明这类「原样来自人写的一句话」的段落：不许把换行吃掉，
+   也不许被当成样式文本 —— 留痕里存的就是那份原文。 */
+.adm-reason {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.adm-detail {
+  margin: 0;
+  font-size: 14px;
+  color: var(--fg-muted);
+}
+
+.adm-raw {
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.adm-raw code {
+  display: block;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tag-admin {
+  background: #fff4e5;
+  border-color: #f0c48a;
+  color: #8a5310;
+  font-weight: 600;
+}
+
+/* 「这条帖子上几条待处理」是这一页的排序依据，所以它得有颜色，不能和别的灰标签一样重。 */
+.tag-hot {
+  background: var(--danger-bg);
+  border-color: #f0b4ab;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* 批量下架那一页的两栏：窄屏上下堆叠（先列表后理由），宽屏才并排。
+   顺序很重要 —— 并排时人是「勾完再写理由」，堆叠时同样是先看列表。 */
+.adm-split {
+  display: grid;
+  gap: 16px;
+  margin: 8px 0 14px;
+}
+
+@media (min-width: 900px) {
+  .adm-split {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
+  }
+}
+
+.adm-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px 10px;
+  margin: 0 0 10px;
+}
+
+.adm-group legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.adm-group legend label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.adm-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.adm-items label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.adm-items input[type='checkbox'] {
+  width: auto;
+}
+
+/* 「按下去会发生什么」的那句预览：它是这一页存在的理由，所以给它边框，
+   不是又一段可有可无的说明文字。 */
+.adm-preview {
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.adm-preview-head {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+
+.adm-preview ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.adm-rule {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 18px 0;
+}
+
+.adm-single {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.adm-single h2 {
+  font-size: 16px;
+  margin: 0 0 6px;
+}
